@@ -144,42 +144,13 @@ sub TIEHASH {
 
 sub STORE {
   my($self, $key, $value) = @_;
-  if ($key =~ s/^CACHE://) {
-    # clearing our cache (probably because of a property notify)
-    if ($value eq 'Deleted') { 
-      # property deleted on server - cache that
-      return $self->{cache}->{$key} = undef;
-    }
-    elsif (exists $self->{cache}->{$key}) {
-      # property changed - clear cache
-      return delete $self->{cache}->{$key};
-    }
-    elsif (exists $self->{cached_list}) {
-      # we hadn't cached this one - perhaps our cached list is out of date
-      my $atom = $self->{x}->atom($key);
-      foreach (@{$self->{cached_list}}) {
-	if ($atom eq $_) {
-	  # no, it's ok, it's just a value we've not cached which changed
-	  return undef;
-	}
-      }
-      # wasn't in our cached list
-      delete $self->{cached_list};
-    }
-    else {
-      # harmless
-      return undef;
-    }
-  }
-  else {
-    my($type, $format, $data) = $self->encode_property($key, $value);
-    $self->{x}->ChangeProperty($self->{id},
-			       $self->{x}->atom($key),
-			       $type, $format,
-			       'Replace',
-			       $data);
-    $value;
-  }
+  my($type, $format, $data) = $self->encode_property($key, $value);
+  $self->{x}->ChangeProperty($self->{id},
+			     $self->{x}->atom($key),
+			     $type, $format,
+			     'Replace',
+			     $data);
+  $value;
 }
 
 ############################################################################
@@ -260,8 +231,29 @@ sub CLEAR {
 
 ############################################################################
 
-sub encode_property {
+sub flush_cache {
+  my($self, $atom, $reason) = @_;
+  my $name = $self->{x}->atom_name($atom);
+  # clearing our cache (probably because of a property notify)
+  if ($reason eq 'Deleted') { 
+    # property deleted on server - cache that
+    $self->{cache}->{$name} = undef;
+  }
+  elsif (exists $self->{cache}->{$name}) {
+    # property changed - clear cache
+    delete $self->{cache}->{$name};
+  }
+  elsif (exists $self->{cached_list}) {
+    # we hadn't cached this one - perhaps our cached list is out of date
+    return if grep { $atom eq $_ } @{$self->{cached_list}};
+    # wasn't in our cached list - flush that
+    delete $self->{cached_list};
+  }
+}
 
+############################################################################
+
+sub encode_property {
   my($self, $key, $value) = @_;
   use Carp qw(cluck); cluck "?";
   die "TODO: encode_property($key) - ".join(':',(caller())[1,2]);

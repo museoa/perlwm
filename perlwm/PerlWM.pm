@@ -40,18 +40,22 @@ sub perlwm {
     ('PerlWM::Frame', 'Enter', 
      sub { 
        my($frame, $event) = @_;
+       return unless $frame->{client};
+       return if $event->{detail} eq 'Inferior';
        $frame->{client}->SetInputFocus('None', 'CurrentTime');
        $frame->ConfigureWindow(stack_mode => 'Above');
      });
 
   $self->{x}->event_add_hook('PerlWM::Frame', 'Drag(Button1)', \&move_opaque);
+  $self->{x}->event_add_hook('PerlWM::Frame', 'Drag(Mod1 Button1)', \&move_opaque);
   $self->{x}->event_add_hook('PerlWM::Client', 'Drag(Mod1 Button1)', \&move_opaque);
   
-  $self->{x}->event_add_hook('PerlWM::Frame', 'Click(Button2)', \&lower_window);
-  $self->{x}->event_add_hook('PerlWM::Client', 'Click(Mod1 Button2)', \&lower_window);
+  $self->{x}->event_add_hook('PerlWM::Frame', 'Click(Button3)', \&lower_window);
+  $self->{x}->event_add_hook('PerlWM::Client', 'Click(Mod1 Button3)', \&lower_window);
 
-  $self->{x}->event_add_hook('PerlWM::Frame', 'Drag(Button3)', \&size_drag);
-  $self->{x}->event_add_hook('PerlWM::Client', 'Drag(Mod1 Button3)', \&size_drag);
+  $self->{x}->event_add_hook('PerlWM::Frame', 'Drag(Button2)', \&size_drag);
+  $self->{x}->event_add_hook('PerlWM::Frame', 'Drag(Mod1 Button2)', \&size_drag);
+  $self->{x}->event_add_hook('PerlWM::Client', 'Drag(Mod1 Button2)', \&size_drag);
 
   $self->{x}->event_add_hook('PerlWM::Frame', 'DestroyNotify', \&destroy_notify);
   $self->{x}->event_add_hook('PerlWM::Frame', 'MapNotify', \&map_notify);
@@ -60,7 +64,13 @@ sub perlwm {
   $self->{x}->event_add_hook('PerlWM::Client', 'ConfigureRequest', sub {
 			       my($client, $event) = @_;
 			       print "client configure request\n";
-			       $client->{x}->dumper($event);
+			       # TODO: actually need to do lots more
+			       my $xe = $event->{xevent};
+			       $self->{x}->ConfigureWindow($xe->{window},
+							   map { exists $xe->{$_}?($_=>$xe->{$_}):() 
+							       } qw(x y width height 
+								    border_width sibling stack_mode));
+#			       $client->{x}->dumper($event);
 			     });
 
   $self->{x}->event_add_hook('PerlWM::Client', 'Property(WM_NAME)', sub {
@@ -229,10 +239,11 @@ sub lower_window {
 ############################################################################
 
 sub destroy_notify {
-
-  my($window, $event) = @_;
-  return unless ref $window;
-  $window->DestroyWindow();
+  my($frame, $event) = @_;
+  return unless $frame->isa('PerlWM::Frame');
+  $frame->{client}->detach(destroyed => 1);
+  $frame->{client} = undef;
+  $frame->destroy();
 }
 
 ############################################################################

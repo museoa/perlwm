@@ -14,8 +14,8 @@ use PerlWM::X::Property;
 ############################################################################
 
 sub new {
-
   my($proto, %args) = @_;
+
   my $class = ref($proto) || $proto || __PACKAGE__;
   my $self = { %args };
   bless $self, $class;
@@ -32,17 +32,27 @@ sub new {
 
 sub attach {
   my($self) = @_;
+
   $self->{x}->window_attach($self);
   unless ($self->{no_props}) {
-    tie my %prop, 'PerlWM::X::Property', $self;
+    $self->{prop_obj} = tie my %prop, 'PerlWM::X::Property', $self;
     $self->{prop} = \%prop;
   }
 }
 
 ############################################################################
 
-sub create {
+sub detach {
+  my($self, %args) = @_;
 
+  $self->{x}->window_detach($self, %args);
+  untie $self->{prop};
+  delete $self->{prop_obj};
+}
+
+############################################################################
+
+sub create {
   my($self, %args) = @_;
 
   # allow naming of args, and supply defaults
@@ -67,9 +77,19 @@ sub create {
 
 ############################################################################
 
-sub event_add {
+sub destroy {
+  my($self) = @_;
 
+  $self->detach();
+  $self->DestroyWindow();
+}
+
+
+############################################################################
+
+sub event_add {
   my($self, $event, $handler) = @_;
+
   $self->{x}->event_add_window($self, $event, $handler);
 }
 
@@ -82,9 +102,8 @@ sub EVENT {
 ############################################################################
 
 sub AUTOLOAD {
-  # this is just lazy really
-  no strict 'vars';
   my($self, @args) = @_;
+  no strict 'vars';
   my $method = $AUTOLOAD;
   my $class = ref $self;
   $method =~ s/\Q$class\E:://;

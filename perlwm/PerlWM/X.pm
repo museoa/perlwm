@@ -54,7 +54,8 @@ sub new {
     eval q{ 
       sub assemble_request {
 	my($self, @args) = @_;
-	$self->{debug}->{$self->{sequence_num}} = join ':',(caller(1))[1,2];
+	my $cd = ((caller(2))[3] =~ /AUTOLOAD/) ? 2 : 1;
+	$self->{debug}->{$self->{sequence_num}} = join ':',(caller($cd))[1,2];
 	$self->SUPER::assemble_request(@args);
       }
     }; 
@@ -109,24 +110,19 @@ sub unpack_mods {
 sub error_handler { 
 
   my($self, $data) = @_;
-  my($type, $seq, $info, $minor_op, $major_op) = unpack("xCSLSCxxxxxxxxxxxxxxxxxxxxx", $data);
-  my($t);
-  $t = join("", "Protocol error: $type (",
-	    $self->do_interp('Error', $type), ") ",
-	    "Sequence Number $seq\n",
-	    " Opcode ($major_op, $minor_op) = ",
-	    ($self->do_interp('Request', $major_op)
-	     or $self->{'ext_request'}{$major_op}[$minor_op][0]), "\n");
-  if ($type == 2) {
-    $t .= " Bad value $info (" . X11::Protocol::hexi($info) . ")\n";
-  }
-  elsif ($self->{'error_type'}[$type] & 1) {
-    $t .= " Bad resource $info (" . X11::Protocol::hexi($info) . ")\n";
-  }
-  print STDERR $t;
+  my($type, $seq, $info, $minor_op, $major_op) = 
+    unpack("xCSLSCxxxxxxxxxxxxxxxxxxxxx", $data);
+  $type = $self->do_interp('Error', $type);
+  my $request = ($self->do_interp('Request', $major_op) ||
+		 $self->{ext_request}{$major_op}[$minor_op][0]);
+  $info = X11::Protocol::hexi($info);
   if ($self->{debug}) {
-    print STDERR "Caller: $self->{debug}->{$seq}\n";
+    print STDERR "Error - $self->{debug}->{$seq} - $request($info) - $type\n";
   }
+  else {
+    print STDERR "Error - $request\n";
+  }
+  # unwedge anything waiting for reply
   ${$self->{replies}->{$seq}} = $data;
 }
 
@@ -138,6 +134,16 @@ sub window_attach {
 
   $self->{window}->{$window->{id}} = $window;
   $self->event_window_hook($window);
+}
+
+############################################################################
+
+sub window_detach {
+
+  my($self, $window, %args) = @_;
+
+  delete $self->{window}->{$window->{id}};
+  $self->event_window_unhook($window, %args);
 }
 
 ############################################################################

@@ -57,6 +57,11 @@ my %XEVENT_TO_EVENT = (EnterNotify => 'Enter',
 
 my %EVENT_TO_ARG = (Property => 'atom');
 
+my %EVENT_TRACE = (PropertyNotify => [qw(window atom)],
+		   ConfigureRequest => [qw(window)],
+		   DestroyNotify => [qw(event window)],
+		   EnterNotify => [qw(event child detail)]);
+
 ############################################################################
 
 # TODO: move these into object
@@ -287,6 +292,19 @@ sub event_window_hook {
 
 ############################################################################
 
+sub event_window_unhook {
+  my($self, $window, %args) = @_;
+  
+  delete $self->{event}->{window}->{$window->{id}};
+  unless ($args{destroyed}) {
+    $window->ChangeWindowAttributes(event_mask => 0);
+    $self->UngrabButton('AnyModifier', 'AnyButton', $window->{id})
+      if $self->alien($window->{id});
+  }
+}
+
+############################################################################
+
 sub event_hook_all {
 
   my($self) = @_;
@@ -300,14 +318,21 @@ sub event_hook_all {
 sub event_trace {
   my($self, $e) = @_;
   return unless $self->{debug};
-  print "$e->{name}";
-  if ($e->{name} eq 'PropertyNotify') {
-    printf "(0x%08x, %s)", $e->{window}, $self->atom_name($e->{atom});
+
+  if (my $t = $EVENT_TRACE{$e->{name}}) {
+    my @a = map { 
+      if ($_ eq 'atom') {
+	"$_:".$self->atom_name($e->{$_});
+      }
+      elsif ($e->{$_} =~ /^\d+$/) {
+	"$_:".sprintf("0x%08x", $e->{$_});
+      }
+      else {
+	"$_:$e->{$_}";
+      }
+    } @{$t};
+    print "$e->{name}(@a)\n";
   }
-  elsif ($e->{name} eq 'ConfigureRequest') {
-    printf "(0x%08x)", $e->{window};
-  }
-  print "\n";
 }
 
 ############################################################################
@@ -368,7 +393,7 @@ sub event_loop {
     else {
       # just wait for the next event
       %event = $self->next_event();
-#      $self->event_trace(\%event);
+      $self->event_trace(\%event);
     }
     if (%event) {
       # remember the server time if we need it
@@ -449,8 +474,7 @@ sub event_loop {
 	# special case to flush the window property cache
 	if ($event{name} eq 'Property') {
 	  if (my $window = $self->{window}->{$event{window}}) {
-	    my $name = $self->atom_name($event{atom});
-	    $window->{prop}->{"CACHE:$name"} = $event{state};
+	    $window->{prop_obj}->flush_cache($event{atom}, $event{state});
 	  }
 	}
       }
