@@ -43,15 +43,26 @@ use PerlWM::X::Window;
 
 sub new {
 
-  my($proto, @args) = @_;
+  my($proto, %args) = @_;
   my $class = ref $proto || $proto || __PACKAGE__;
-  my $self = $class->SUPER::new(@args);
+  my $self = $class->SUPER::new(delete $args{display}, delete $args{auth});
 
   $self->{error_handler} = \&error_handler;
 
+  if ($args{debug}) {
+    # super cool x debugging - you've never had it so good
+    eval q{ 
+      sub assemble_request {
+	my($self, @args) = @_;
+	$self->{debug}->{$self->{sequence_num}} = join ':',(caller(1))[1,2];
+	$self->SUPER::assemble_request(@args);
+      }
+    }; 
+    die $@ if $@;
+  }
+
   $self->object_init();
   $self->event_init();
-
 
   return $self;
 }
@@ -101,7 +112,7 @@ sub error_handler {
   my($type, $seq, $info, $minor_op, $major_op) = unpack("xCSLSCxxxxxxxxxxxxxxxxxxxxx", $data);
   my($t);
   $t = join("", "Protocol error: $type (",
-	    $self->do_interp('Error', $type), "); ",
+	    $self->do_interp('Error', $type), ") ",
 	    "Sequence Number $seq\n",
 	    " Opcode ($major_op, $minor_op) = ",
 	    ($self->do_interp('Request', $major_op)
@@ -113,7 +124,10 @@ sub error_handler {
     $t .= " Bad resource $info (" . X11::Protocol::hexi($info) . ")\n";
   }
   print STDERR $t;
-
+  if ($self->{debug}) {
+    print STDERR "Caller: $self->{debug}->{$seq}\n";
+  }
+  ${$self->{replies}->{$seq}} = $data;
 }
 
 ############################################################################
