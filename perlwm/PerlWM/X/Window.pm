@@ -14,6 +14,7 @@ use PerlWM::X::Property;
 ############################################################################
 
 sub new {
+
   my($proto, %args) = @_;
 
   my $class = ref($proto) || $proto || __PACKAGE__;
@@ -31,6 +32,7 @@ sub new {
 ############################################################################
 
 sub attach {
+
   my($self) = @_;
 
   $self->{x}->window_attach($self);
@@ -43,6 +45,7 @@ sub attach {
 ############################################################################
 
 sub detach {
+
   my($self, %args) = @_;
 
   $self->{x}->window_detach($self, %args);
@@ -53,6 +56,7 @@ sub detach {
 ############################################################################
 
 sub create {
+
   my($self, %args) = @_;
 
   # allow naming of args, and supply defaults
@@ -70,6 +74,8 @@ sub create {
 
   $args{bit_gravity} ||= 'Static'; 
 
+  $args{event_mask} ||= $self->event_mask();
+
   $self->{id} = $self->{x}->new_rsrc();
   $self->CreateWindow(@args, %args);
   $self->attach();
@@ -78,19 +84,20 @@ sub create {
 ############################################################################
 
 sub destroy {
+
   my($self) = @_;
 
   $self->detach();
   $self->DestroyWindow();
 }
 
-
 ############################################################################
 
-sub event_add {
-  my($self, $event, $handler) = @_;
+sub event_mask {
 
-  $self->{x}->event_add_window($self, $event, $handler);
+  my($self, $mask) = @_;
+
+  return $self->{x}->event_window_mask($self, $mask);
 }
 
 ############################################################################
@@ -105,12 +112,14 @@ sub position {
 ############################################################################
 
 sub EVENT {
+
   return ();
 }
 
 ############################################################################
 
 sub AUTOLOAD {
+
   my($self, @args) = @_;
   no strict 'vars';
   my $method = $AUTOLOAD;

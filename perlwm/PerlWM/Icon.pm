@@ -53,4 +53,17 @@ sub new {
 
 ############################################################################
 
+use PerlWM::Action;
+
+sub EVENT {
+
+  return ('Drag(Button1)' => \&PerlWM::Action::move_icon_opaque,
+	  'Drag(Mod1 Button1)' => \&PerlWM::move_icon_opaque,
+	  'Click(Button1)', \&PerlWM::Action::deiconify_window,
+	  'Click(Double Button1)', \&PerlWM::Action::deiconify_window);
+
+}
+ 
+############################################################################
+
 1;

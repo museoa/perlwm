@@ -135,7 +135,6 @@ sub window_attach {
   my($self, $window) = @_;
 
   $self->{window}->{$window->{id}} = $window;
-  $self->event_window_hook($window);
 }
 
 ############################################################################
@@ -145,7 +144,7 @@ sub window_detach {
   my($self, $window, %args) = @_;
 
   delete $self->{window}->{$window->{id}};
-  $self->event_window_unhook($window, %args);
+  $self->event_window_detach($window, %args);
 }
 
 ############################################################################
