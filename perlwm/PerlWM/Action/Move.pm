@@ -43,6 +43,7 @@ sub move_by {
 
   my($self, $delta) = @_;
   $self->{position}->[$_] += $delta->[$_] for (0,1);
+  $self->{x}->WarpPointer('None', 'None', 0, 0, 0, 0, @{$delta});
   $self->{target}->configure(position => $self->{position});
 }
 
