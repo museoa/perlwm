@@ -67,12 +67,14 @@ sub start {
 
 sub highlight_frame {
 
-  my($self, $frame, $type) = @_;
+  my($self, $frame, $type, $itype) = @_;
   return unless my $color = $self->{x}->color_get("search_frame_$type");
+  $itype ||= $type;
+  return unless my $icolor = $self->{x}->color_get("search_frame_$itype");
   $frame->ChangeWindowAttributes(background_pixel => $color);
   $frame->ClearArea();
   if ($frame->{icon}) {
-    $frame->{icon}->ChangeWindowAttributes(background_pixel => $color);
+    $frame->{icon}->ChangeWindowAttributes(background_pixel => $icolor);
     $frame->{icon}->ClearArea();
   }
 }
@@ -182,7 +184,7 @@ sub enter {
   if (my $select = $self->{match}->[$self->{select}]) {
     $select->deiconify();
     $select->ConfigureWindow(stack_mode => 'Above');
-    $self->highlight_frame($select, 'focus');
+    $self->highlight_frame($select, 'focus', 'nomatch');
     $select->warp_to([-10, 10]);
     $select->enter();
   }
