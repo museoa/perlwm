@@ -12,6 +12,10 @@ use base qw(PerlWM::Action);
 
 ############################################################################
 
+my %COLOR = ( match => '#0000ff', select => '#00ff00', nomatch => '#ffffff' );
+
+############################################################################
+
 sub start {
 
   my($target, $event) = @_;
@@ -29,7 +33,26 @@ sub start {
 
   $self->{popup}->clear();
   $self->{popup}->MapWindow();
+
+  while (my($k, $v) = each %COLOR) {
+    $self->{color}->{$k} = $self->{x}->object_get('color', $v, $v);
+  }
+
   return $self;
+}
+
+############################################################################
+
+sub highlight {
+
+  my($self, $frame, $color) = @_;
+  return unless $color = $self->{color}->{$color};
+  $frame->ChangeWindowAttributes(background_pixel => $color);
+  $frame->ClearArea();
+  if ($frame->{icon}) {
+    $frame->{icon}->ChangeWindowAttributes(background_pixel => $color);
+    $frame->{icon}->ClearArea();
+  }
 }
 
 ############################################################################
@@ -37,6 +60,7 @@ sub start {
 sub finish {
 
   my($self) = @_;
+  $self->highlight($_, 'nomatch') for @{$self->{frames}};
   $self->{popup}->UnmapWindow();
   $self->{popup}->DestroyWindow();
   $self->SUPER::finish();
@@ -47,17 +71,19 @@ sub finish {
 sub show {
 
   my($self) = @_;
-  # TODO: display this information in the popup
-  return;
-  print "search: $self->{text}\n";
-  print "error: $self->{error}\n" if $self->{error};
+  # TODO: display this information in the popup?
+#  print "search: $self->{text}\n";
+#  print "error: $self->{error}\n" if $self->{error};
+  my %seen;
   for (my $index = 0; $index <= $#{$self->{match}}; $index++) { 
-    if ($index == $self->{select}) {
-      print ">> $self->{match}->[$index]->{name} <<\n";
-    }
-    else {
-      print "   $self->{match}->[$index]->{name}\n";
-    }
+    my $frame = $self->{match}->[$index];
+    my $color = ($index == $self->{select} ? 'select' : 'match');
+    $self->highlight($frame, $color);
+    $seen{$frame->{id}}++;
+  }
+  foreach my $frame (@{$self->{frames}}) {
+    next if $seen{$frame->{id}};
+    $self->highlight($frame, 'nomatch');
   }
 }
 
@@ -132,6 +158,7 @@ sub enter {
 
   my($self) = @_;
   if (my $select = $self->{match}->[$self->{select}]) {
+    $select->deiconify();
     $select->ConfigureWindow(stack_mode => 'Above');
     $select->warp_to([-10, 10]);
   }
