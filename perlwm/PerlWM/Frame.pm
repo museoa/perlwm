@@ -15,8 +15,16 @@ use PerlWM::Widget::Label;
 
 ############################################################################
 
-my($FOCUS, $BLUR) = ([255, 0, 0], [255, 255, 255]);
-my($BLEND_STEP, $BLEND_DELAY, @BLEND) = (10, 10);
+BEGIN {
+  my $frame = PerlWM::Config->new('default/frame');
+  $frame->set('blur' => '#ffffff',
+	      'focus' => '#ff0000',
+	      'border_width' => 2,
+	      'title/background' => '#000000',
+	      'title/foreground' => '#ffffff',
+	      'title/font' => 
+	      '-b&h-lucida-medium-r-normal-*-*-100-*-*-p-*-iso8859-1');
+};
 
 ############################################################################
 
@@ -25,17 +33,6 @@ sub new {
   my($proto, %args) = @_;
   my $class = ref($proto) || $proto || __PACKAGE__;
   my $self = $class->SUPER::new(%args);
-
-  unless (@BLEND) {
-    my @delta = map { ($FOCUS->[$_] - $BLUR->[$_]) / $BLEND_STEP } 0..2;
-    my @color = @{$BLUR};
-    foreach (0..$BLEND_STEP) {
-      my $rgb = sprintf("#%02x%02x%02x", @color);
-      push @BLEND, $self->{x}->object_get('color', $rgb, $rgb);
-      $color[$_] += $delta[$_] for 0..2;
-      @color = @{$FOCUS} if $_ == $BLEND_STEP;
-    }
-  }
 
   $self->{client} = PerlWM::X::Window->new(x => $self->{x},
 					   id => $self->{client_id});
@@ -61,31 +58,41 @@ sub new {
   $mask |= $self->{x}->pack_event_mask('SubstructureNotify',
 				       'SubstructureRedirect');
 
-  $self->create(x => $geom{x} - 2,
-		y => $geom{y} - (2 + 20),
-		width => $geom{width} + 4,
-		height => $geom{height} + 4 + 20,
-		background_pixel => $BLEND[0],
+  $self->{border_width} = PerlWM::Config->get('frame/border_width');
+
+  $geom{x} ||= $self->{border_width};
+  $geom{y} ||= ($self->{border_width} * 2) + 18;
+
+  $self->create(x => $geom{x} - $self->{border_width},
+		y => $geom{y} - (($self->{border_width} * 2) + 18),
+		width => $geom{width} + ($self->{border_width} * 2),
+		height => $geom{height} + ($self->{border_width} * 3) + 18,
+		background_pixel => $self->{x}->color_get('frame/blur'),
 		event_mask => $mask);
 
   # grab things (but not things without modifiers)
   $self->event_grab(grep $_->{mods}, @grab);
 
-  $self->{blend} = [0, 0];
-
   $self->{label} = PerlWM::Widget::Label->new
     (x => $self->{x},
      padding => 2,
-     value => $self->{client}->{prop}->{WM_NAME});
+     value => $self->{client}->{prop}->{WM_NAME},
+     foreground => 'frame/title/foreground',
+     background => 'frame/title/background',
+     font => 'frame/title/font');
   $self->{name} = $self->{client}->{prop}->{WM_NAME};
 
   $self->{label}->create(parent => $self,
-			 x => 2, y => 2,
-			 width => $geom{width}, height => 18);
+			 x => $self->{border_width}, 
+			 y => $self->{border_width},
+			 width => $geom{width}, 
+			 height => 18);
   $self->{label}->MapWindow();
 
   $self->{client}->ConfigureWindow(border_width => 0);
-  $self->{client}->ReparentWindow($self->{id}, 2, 2 + 20);
+  $self->{client}->ReparentWindow($self->{id}, 
+				  $self->{border_width}, 
+				  ($self->{border_width} * 2) + 18);
 
   $self->{client}->MapWindow() if $args{map_request};
 
@@ -119,8 +126,8 @@ sub position {
 
   my($self) = @_;
   my $position = $self->geom()->{position};
-  $position->[0] += 2;
-  $position->[1] += 2 + 20;
+  $position->[0] += $self->{border_width};
+  $position->[1] += ($self->{border_width} * 2) + 18;
   return $position;
 }
 
@@ -130,8 +137,8 @@ sub size {
 
   my($self) = @_;
   my $size = $self->geom()->{size};
-  $size->[0] -= 4;
-  $size->[1] -= 4 + 20;
+  $size->[0] -= ($self->{border_width} * 2);
+  $size->[1] -= ($self->{border_width} * 3) + 18;
   return $size;
 }
 
@@ -155,21 +162,22 @@ sub configure {
       $position->[$_] += (($size->[$_] - $orig->[$_]) * 
 			  (($anchor->[$_] < 0) ? -1 : 0)) for (0, 1);
     }
-    $frame{width} = $size->[0] + 4;
-    $frame{height} = $size->[1] + 4 + 20;
+    $frame{width} = $size->[0] + ($self->{border_width} * 2);
+    $frame{height} = $size->[1] + ($self->{border_width} * 3) + 18;
     $client{width} = $size->[0];
     $client{height} = $size->[1];
   }
   if ($position) {
-    $frame{x} = $position->[0] - 2;
-    $frame{y} = $position->[1] - (2 + 20);
+    $frame{x} = $position->[0] - $self->{border_width};
+    $frame{y} = $position->[1] - (($self->{border_width} * 2) + 18);
     $client{x} = $position->[0];
     $client{y} = $position->[1];
   }
   if (%arg) {
     $self->ConfigureWindow(%frame);
     $self->geom(%frame);
-    $self->{label}->ConfigureWindow(width => $frame{width} - 4)
+    $self->{label}->ConfigureWindow(width => ($frame{width} - 
+					      ($self->{border_width} * 2)))
       if $frame{width};
     $size ||= $self->size();
     my %event = ( name => 'ConfigureNotify',
@@ -201,35 +209,9 @@ sub configure_request {
 				  } qw(x y width height 
 				       border_width sibling stack_mode));
   if (defined($xe->{width}) && defined($xe->{height})) {
-    $self->ConfigureWindow(width => $xe->{width} + 4,
-			   height => $xe->{height} + 4 + 20);
-  }
-}
-
-############################################################################
-
-sub blend {
-  my($self, $start) = @_;
-  my $blend = $self->{blend};
-  if (defined($start) && (!ref($start))) {
-    if ((($start == -1) && ($blend->[0] == 0) ||
-	 ($start == 1) && ($blend->[0] == $#BLEND))) {
-      # already there
-      return;
-    }
-    $blend->[1] = $start;
-  }
-  $blend->[0] += $blend->[1];
-  $self->ChangeWindowAttributes(background_pixel => $BLEND[$blend->[0]]);
-  $self->ClearArea();
-  if ((($blend->[1] == -1) && ($blend->[0] == 0) ||
-       ($blend->[1] == 1) && ($blend->[0] == $#BLEND))) {
-    # made it
-    $blend->[1] = 0;
-  }
-  elsif ($blend->[1]) {
-    # not there yet, keep going
-    $self->timer_set($BLEND_DELAY, 'Blend');
+    $self->ConfigureWindow
+      (width => $xe->{width} + ($self->{border_width} * 2),
+       height => $xe->{height} + ($self->{border_width} * 3) + 18);
   }
 }
 
@@ -256,6 +238,7 @@ sub focus {
 		       $self->{x}->pack_event(%event));
   }
   $self->{perlwm}->{focus} = $self;
+  $self->{perlwm}->{prop}->{PERLWM_FOCUS} = $self->{id};
 }
 
 ############################################################################
@@ -268,7 +251,8 @@ sub enter {
     return if $event->{mode} eq 'Grab';
   }
   $self->focus();
-  $self->blend(1);
+  $self->ChangeWindowAttributes(background_pixel => $self->{x}->color_get('frame/focus'));
+  $self->ClearArea();
   $self->timer_set(10000, 'Raise');
 }
 
@@ -278,13 +262,16 @@ sub leave {
 
   my($self, $event) = @_;
   return unless my $client = $self->{client};
-  return if $event->{detail} eq 'Inferior';
-  return unless $event->{mode} eq 'Normal';
+  if ($event) {
+    return if $event->{detail} eq 'Inferior';
+    return unless $event->{mode} eq 'Normal';
+  }
   return unless $self->{perlwm}->{focus} == $self;
 
   $self->{perlwm}->SetInputFocus('PointerRoot', $self->{x}->{timestamp});
   $self->{perlwm}->{focus} = $self->{perlwm};
-  $self->blend(-1);
+  $self->ChangeWindowAttributes(background_pixel => $self->{x}->color_get('frame/blur'));
+  $self->ClearArea();
   $self->timer_set(0, 'Raise');
 }
 
@@ -492,7 +479,6 @@ sub EVENT { ( __PACKAGE__->SUPER::EVENT,
 	      'Enter' => \&enter,
 	      'Leave' => \&leave,
 	      'Timer(Raise)' => \&auto_raise,
-	      'Timer(Blend)' => \&blend,
 
 	      'ConfigureRequest' => \&configure_request,
 	      'DestroyNotify' => \&destroy_notify,
