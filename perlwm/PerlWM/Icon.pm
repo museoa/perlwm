@@ -36,11 +36,15 @@ sub new {
 
   $self->{label} = PerlWM::Widget::Label->new(x => $self->{x},
 					      padding => 2,
+					      resize => 'auto',
 					      value => $self->{client}->{prop}->{WM_NAME});
   $self->{label}->create(parent => $self,
 			 x => 2, y => 2,
-			 width => 50, height => 18);
+			 width => 'auto', height => 'auto');
   $self->{label}->MapWindow();
+
+  %geom = $self->{label}->GetGeometry();
+  $self->ConfigureWindow(width => $geom{width} + 4, height => $geom{height} + 4);
 
   $self->{client}->{icon} = $self;
 
