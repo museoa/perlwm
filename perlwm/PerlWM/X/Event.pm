@@ -297,6 +297,21 @@ sub event_hook_all {
 
 ############################################################################
 
+sub event_trace {
+  my($self, $e) = @_;
+  return unless $self->{debug};
+  print "$e->{name}";
+  if ($e->{name} eq 'PropertyNotify') {
+    printf "(0x%08x, %s)", $e->{window}, $self->atom_name($e->{atom});
+  }
+  elsif ($e->{name} eq 'ConfigureRequest') {
+    printf "(0x%08x)", $e->{window};
+  }
+  print "\n";
+}
+
+############################################################################
+
 sub event_loop {
 
   # TODO: currently, two single clicks will only fire a single single
@@ -353,6 +368,7 @@ sub event_loop {
     else {
       # just wait for the next event
       %event = $self->next_event();
+#      $self->event_trace(\%event);
     }
     if (%event) {
       # remember the server time if we need it
@@ -444,7 +460,7 @@ sub event_loop {
       # find the most specific event binding
       foreach my $meta (qw(window hook class global)) {
 	# use various event window fields
-	foreach my $field (qw(event child window)) {
+	foreach my $field (qw(event child window parent)) {
 	  next unless $id = $event{$field};
 	  if ($meta eq 'global') {
 	    next unless $target = $self->{event}->{global}->{$name};
@@ -461,11 +477,12 @@ sub event_loop {
 	    next unless $target = $hook_list->{$name};
 	  }
 	  elsif ($meta eq 'window') {
+	    next unless $window = $self->{window}->{$id};
 	    next unless $target = $self->{event}->{window}->{$id}->{$name};
 	  }
 	  next unless (!defined($arg)) || ($target = $target->{$arg});
 	  @event{qw(meta window x)} = ($meta, $window, $self);
-	  next event if &{$target->{sub}}($event{window}, 
+	  next event if &{$target->{sub}}($window, 
 					  \%event,
 					  @{$target->{arg}});
 	}
