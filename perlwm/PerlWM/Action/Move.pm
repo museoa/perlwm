@@ -19,7 +19,7 @@ my %SPEED = ( 0 => 5, # normal
 	      1 => 1, # shift
 	      4 => 10, # control
 	      8 => 25, # mod1
-	      12 => 50, # control + mod1 
+	      12 => 50, # control + mod1
 	    );
 
 ############################################################################
@@ -67,7 +67,7 @@ sub delta_key {
 
 ############################################################################
 
-sub EVENT {
+sub OVERLAY {
 
   my %delta_key;
   foreach my $key (keys %DIR) {
@@ -76,7 +76,7 @@ sub EVENT {
     }
   }
 
-  ( __PACKAGE__->SUPER::EVENT,
+  ( __PACKAGE__->SUPER::OVERLAY,
 
     %delta_key,
 

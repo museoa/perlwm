@@ -37,10 +37,15 @@ sub new {
     }
   }
 
-  $self->{client} = PerlWM::Client->new(x => $self->{x}, 
-					id => $self->{client_id},
-					attr => $self->{client_attr},
-					frame => $self);
+  $self->{client} = PerlWM::X::Window->new(x => $self->{x},
+					   id => $self->{client_id});
+  # set the do not propogate mask for all input events
+  my $input = $self->{x}->pack_event_mask(qw(KeyPress KeyRelease
+					     ButtonPress ButtonRelease),
+					  map "Button${_}Motion", (1..5));
+  $self->{client}->ChangeWindowAttributes(do_not_propogate_mask => $input);
+
+  $self->{client}->event_overlay_add($self);
 
   $self->{x}->ChangeSaveSet('Insert', $self->{client_id});
 
@@ -52,7 +57,7 @@ sub new {
 				       'SubstructureRedirect');
 
   $self->create(x => $geom{x} - 2,
-		y => $geom{y} - 20,
+		y => $geom{y} - (2 + 20),
 		width => $geom{width} + 4,
 		height => $geom{height} + 4 + 20,
 		background_pixel => $BLEND[0],
@@ -77,6 +82,8 @@ sub new {
   $self->{client}->ReparentWindow($self->{id}, 2, 2 + 20);
 
   $self->{client}->MapWindow() if $args{map_request};
+
+  push @{$self->{perlwm}->{frames}}, $self;
 
   $self->MapWindow();
 
@@ -288,11 +295,7 @@ sub unmap_notify {
 sub iconify {
 
   my($self) = @_;
-  $self->{icon} ||= PerlWM::Icon->new
-    (x => $self->{x},
-     frame => $self,
-     name => ($self->{client}->{prop}->{WM_ICON_NAME} ||
-	      $self->{client}->{prop}->{WM_NAME}));
+  $self->{icon} ||= PerlWM::Icon->new(x => $self->{x}, frame => $self);
   $self->{icon}->MapWindow();
   $self->UnmapWindow();
 }
@@ -344,13 +347,35 @@ sub prop_wm_name {
 
 ############################################################################
 
-sub prop_wm_icon_name {
+sub find_frame {
 
-  my($self, $event) = @_;
-  return unless my $client = $self->{client};
-  return unless my $icon = $self->{icon};
-  my $name = $client->{prop}->{WM_ICON_NAME};
-  $self->{icon}->name($name);
+  my($self, $offset) = @_;
+
+  my $frames = $self->{perlwm}->{frames};
+  my $nframes = scalar @{$frames};
+  for (my $index = 0; $index < $nframes; $index++) {
+    if ($frames->[$index] == $self) {
+      $index += $offset;
+      $offset += $nframes if $index < 0;
+      $offset -= $nframes if $index > $nframes;
+      return $frames->[$index];
+    }
+  }
+  return $self;
+}
+
+############################################################################
+
+sub warp_to {
+
+  my($self, $position) = @_;
+  my $size = $self->size();
+  for (0, 1) { 
+    $position->[$_] += $size->[$_] if $position->[$_] < 0;
+  }
+  $self->{x}->WarpPointer($self->{perlwm}->{id}, $self->{id},
+			  0, 0, 0, 0,
+			  @{$position});
 }
 
 ############################################################################
@@ -379,6 +404,9 @@ sub EVENT { ( __PACKAGE__->SUPER::EVENT,
 	      'Key(Mod4 Up)' => action('raise_window'),
 	      'Key(Mod4 Down)' => action('lower_window'),
 
+	      'Key(Mod4 Left)' => action('focus_previous'),
+	      'Key(Mod4 Right)' => action('focus_next'),
+
 	      # TODO: config for focus policy
 	      'Enter' => \&enter,
 	      'Leave' => \&leave,
@@ -389,6 +417,8 @@ sub EVENT { ( __PACKAGE__->SUPER::EVENT,
 	      'DestroyNotify' => \&destroy_notify,
 	      'MapNotify' => \&map_notify,
 	      'UnmapNotify' => \&unmap_notify ) }
+
+sub OVERLAY { ( 'Property(WM_NAME)' => \&prop_wm_name ) }
 
 ############################################################################
 

@@ -15,16 +15,8 @@ use PerlWM::Action;
 
 sub move_opaque {
 
-  my($window, $event) = @_;
-  my($frame, $client);
-  if ($window->isa('PerlWM::Frame')) {
-    $frame = $window;
-    $client = $frame->{client};
-  }
-  elsif ($window->isa('PerlWM::Client')) {
-    $client = $window;
-    $frame = $client->{frame};
-  }
+  my($frame, $event) = @_;
+  my $client = $frame->{client};
   my $state = $event->{state};
   if ($event->{drag} eq 'start') {
     if ($frame) {
@@ -43,16 +35,8 @@ sub move_opaque {
 
 sub resize_opaque {
 
-  my($window, $event) = @_;
-  my($frame, $client);
-  if ($window->isa('PerlWM::Frame')) {
-    $frame = $window;
-    $client = $frame->{client};
-  }
-  elsif ($window->isa('PerlWM::Client')) {
-    $client = $window;
-    $frame = $client->{frame};
-  }
+  my($frame, $event) = @_;
+  my $client = $frame->{client};
   my $state = $event->{state};
   if ($event->{drag} eq 'start') {
     if ($frame) {
@@ -132,6 +116,26 @@ sub move_icon_opaque {
     $window->ConfigureWindow(x => $state->{orig_position}->[0] + $event->{delta}->[0],
 			     y => $state->{orig_position}->[1] + $event->{delta}->[1]);
   }
+}
+
+############################################################################
+
+sub focus_previous {
+
+  my($frame, $event) = @_;
+  $frame = $frame->find_frame(-1);
+  $frame->ConfigureWindow(stack_mode => 'Above');
+  $frame->warp_to([-10, 10]);
+}
+
+############################################################################
+
+sub focus_next {
+
+  my($frame, $event) = @_;
+  $frame = $frame->find_frame(1);
+  $frame->ConfigureWindow(stack_mode => 'Above');
+  $frame->warp_to([-10, 10]);
 }
 
 ############################################################################

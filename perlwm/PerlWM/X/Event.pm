@@ -184,19 +184,22 @@ sub event_handler_parse {
 
 sub event_class {
 
-  my($self, $target) = @_;
+  my($self, $target, $overlay) = @_;
 
+  my $type = $overlay ? 'overlay' : 'event';
   my $class = ref $target;
-  my $result = $self->{event}->{$class};
+  my $result = $self->{$type}->{$class};
   if (!defined($result)) {
-    my $event = { eval { $class->EVENT() } };
+    my $event = { ($overlay
+		   ? eval { $class->OVERLAY() }
+		   : eval { $class->EVENT() } ) };
     die $@ if $@;
     $result = {};
     while (my($k, $v) = each %{$event}) {
       $v = $target->can($v) unless ref $v;
       $self->event_handler_parse($result, $k, $v);
     }
-    $self->{event}->{$class} = $result;
+    $self->{$type}->{$class} = $result;
   }
   return $result;
 }
@@ -205,12 +208,12 @@ sub event_class {
 
 sub event_window_mask {
 
-  my($self, $window, $mask) = @_;
+  my($self, $window, $mask, $overlay) = @_;
 
   $mask ||= 0;
   my %grab;
 
-  foreach my $event ($self->event_class($window)) {
+  foreach my $event ($self->event_class($window, $overlay)) {
     while (my($k, $v) = each %{$event}) {
       if ($k =~ $MOUSE_EVENT) {
 	my $bmask = $self->pack_event_mask(qw(ButtonPress ButtonRelease));
@@ -252,23 +255,41 @@ sub event_window_mask {
 
 ############################################################################
 
-sub event_overlay {
+sub event_overlay_remove {
 
-  my($self, $window, $overlay) = @_;
-  my $old_mask = $window->{event_mask} | ($window->{overlay_mask} || 0);
-  my $new_mask;
-  if ($window->{overlay} = $overlay) {
-    $overlay->{event_mask} ||= $self->event_window_mask($overlay);
-    $window->{overlay_mask} = $overlay->{event_mask};
-    $new_mask = $window->{event_mask} | $window->{overlay_mask};
+  my($self, $window, $overlay, $remove) = @_;
+  $self->event_overlay_add($window, $overlay, 1);
+}
+
+############################################################################
+
+sub event_overlay_add {
+
+  my($self, $window, $overlay, $remove) = @_;
+  my $mask = 0;
+  $window->{overlay} = [ grep {
+    if ($_ == $overlay) {
+      $overlay = undef if $remove;
+      0;
+    }
+    else {
+      $mask |= $_->{overlay_mask};
+      1;
+    }
+  } @{$window->{overlay}||[]} ];
+
+  if ($overlay) {
+    push @{$window->{overlay}}, $overlay;
+    $overlay->{overlay_mask} ||= $self->event_window_mask($overlay, 0, 1);
+    $mask |= $overlay->{overlay_mask};
   }
-  else {
-    $window->{overlay_mask} = 0;
-    $new_mask = $window->{event_mask};
-  }
-  if ($new_mask != $old_mask) {
-    $self->ChangeWindowAttributes(id => $window->{id},
-				  event_mask => $new_mask);
+
+  if ((!defined($window->{overlay_event_mask})) ||
+      ($window->{overlay_event_mask} != $mask)) {
+    if ($window->{overlay_event_mask} = $mask) {
+      $mask |= $window->{event_mask} || 0;
+      $window->ChangeWindowAttributes(event_mask => $mask);
+    }
   }
 }
 
@@ -496,15 +517,16 @@ sub event_loop {
 	}
       }
       # dispatch the event
-      my($id, $window, $target, $method);
+      my($id, $window, $target, $class, $method);
       my($name, $arg) = ($event{name}, $event{arg});
       # use various event window fields
       foreach my $field (qw(event child window parent)) {
 	next unless $id = $event{$field};
 	next unless $window = $self->{window}->{$id};
-	foreach ($window->{overlay}, $window) {
-	  next unless defined;
-	  next unless $method = $self->event_class($_)->{$name};
+	foreach (@{$window->{overlay} || []}, $window) {
+	  next unless defined $_;
+	  next unless $class = $self->event_class($_, !($_ == $window));
+	  next unless $method = $class->{$name};
 	  next unless ((!defined($arg)) || ($method = $method->{$arg}));
 	  if ($method) {
 	    $target = $_;

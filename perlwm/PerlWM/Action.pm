@@ -80,14 +80,14 @@ sub new {
   die "need x" unless $self->{x};
 
   if ($self->{target}) {
-    # cancel any current action on this window
+    # finish any current action on this window
     if ($self->{target}->{action}) {
-      $self->{target}->{action}->cancel();
+      $self->{target}->{action}->finish();
     }
     # remember we are in progress
     $self->{target}->{action} = $self;
     # overlay our event table
-    $self->{target}->event_overlay($self);
+    $self->{target}->event_overlay_add($self);
   }
 
   if ($self->{grab}) {
@@ -122,6 +122,7 @@ sub finish {
   my($self) = @_;
   # cancel the safety net
   alarm(0) if $ENV{PERLWM_DEBUG};
+  $self->{target}->event_overlay_remove($self);
   $self->{target}->{action} = undef;
   if ($self->{grab}) {
     # undo any grabs
@@ -144,7 +145,7 @@ sub cancel {
 
 ############################################################################
 
-sub EVENT { ( 'Key(Escape)' => 'cancel' ) }
+sub OVERLAY { ( 'Key(Escape)' => 'cancel' ) }
 
 ############################################################################
 

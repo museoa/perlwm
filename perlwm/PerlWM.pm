@@ -14,7 +14,6 @@ use base qw(PerlWM::X::Window);
 use PerlWM::X;
 use PerlWM::Icon;
 use PerlWM::Frame;
-use PerlWM::Client;
 use PerlWM::Widget;
 use PerlWM::Action;
 
@@ -38,19 +37,18 @@ sub new {
     my $ssr = $self->{x}->pack_event_mask('SubstructureRedirect');
     $self->ChangeWindowAttributes(id => $self->{id},
 				  event_mask => $self->event_mask($ssr));
-    (undef, undef, @clients) = $self->{x}->QueryTree($self->{x}->{root});
-    $self->manage_window($_) for @clients;
-    $self->{focus} = $self;
   };
   if ($@) {
     warn $@;
     return undef;
   }
-  else {
-    $self->{x}->event_loop();
-    # won't actually get here
-    return $self;
-  }
+  $self->{focus} = $self;
+  $self->{frames} = [];
+  (undef, undef, @clients) = $self->{x}->QueryTree($self->{x}->{root});
+  $self->manage_window($_) for @clients;
+  $self->{x}->event_loop();
+  # won't actually get here
+  return $self;
 }
 
 ############################################################################
@@ -93,10 +91,8 @@ sub configure_request {
 
 ############################################################################
 
-sub EVENT {
-  return ( MapRequest => \&map_request,
-	   ConfigureRequest => \&configure_request );
-}
+sub EVENT { ( MapRequest => \&map_request,
+	      ConfigureRequest => \&configure_request ) }
 
 ############################################################################
 

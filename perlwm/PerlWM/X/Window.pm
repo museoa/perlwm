@@ -109,10 +109,18 @@ sub event_grab {
 
 ############################################################################
 
-sub event_overlay {
+sub event_overlay_add {
 
   my($self, $overlay) = @_;
-  return $self->{x}->event_overlay($self, $overlay);
+  return $self->{x}->event_overlay_add($self, $overlay);
+}
+
+############################################################################
+
+sub event_overlay_remove {
+
+  my($self, $overlay) = @_;
+  return $self->{x}->event_overlay_remove($self, $overlay);
 }
 
 ############################################################################
