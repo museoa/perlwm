@@ -1,6 +1,6 @@
 #
 # $Id$
-# 
+#
 
 package PerlWM::Client;
 
@@ -21,14 +21,16 @@ sub new {
   my $class = ref($proto) || $proto || __PACKAGE__;
   my $self = $class->SUPER::new(%arg);
 
-  # we want some events, but not the input ones which are listed
-  # in our event map, because those will be grabbed by the frame
+  # we want some events, but never any input ones - we also
+  # set the do not propogate mask for simple clients
   my $mask = $self->event_mask();
-#KeyPress KeyRelease
-  $mask &= ~($self->{x}->pack_event_mask(qw(
-					    ButtonPress ButtonRelease),
-					 map "Button${_}Motion", (1..5)));
-  $self->ChangeWindowAttributes(id => $self->{id}, event_mask => $mask);
+  my $input = $self->{x}->pack_event_mask(qw(KeyPress KeyRelease
+					     ButtonPress ButtonRelease),
+					  map "Button${_}Motion", (1..5));
+  $self->{event_mask} = ($mask & (~$input));
+  $self->ChangeWindowAttributes(id => $self->{id},
+				do_not_propogate_mask => $input,
+				event_mask => $self->{event_mask});
 
   return $self;
 }
@@ -154,25 +156,10 @@ sub deiconify {
 
 ############################################################################
 
-use PerlWM::Action;
+sub EVENT { ( # TODO: can we do this with an overlay?
+	     'Property(WM_NAME)' => sub { $_[0]->{frame}->prop_wm_name($_[1]) },
+	     ) }
 
-sub EVENT {
-  return (
-	  # TODO: load these bindings via some config stuff
-	  'Drag(Mod1 Button1)' => \&PerlWM::Action::move_opaque,
-	  'Drag(Mod1 Button2)' => \&PerlWM::Action::resize_opaque,
-	  'Click(Mod1 Button1)' => \&PerlWM::Action::raise_window,
-	  'Click(Mod1 Button3)' => \&PerlWM::Action::iconify_window,
-
-	  # TODO: need a better way to do these grabs
-	  'Key(Mod4 m)' => sub {  },
-
-	  # TODO: maybe this should be done with listeners?
-	  'Property(WM_NAME)' => sub { $_[0]->{frame}->prop_wm_name($_[1]) },
-
-	  # no SUPER here
-	 );
-}
 
 ############################################################################
 

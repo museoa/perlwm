@@ -1,6 +1,6 @@
 #
 # $Id$
-# 
+#
 
 package PerlWM::Action;
 
@@ -9,156 +9,142 @@ package PerlWM::Action;
 use strict;
 use warnings;
 
+use base qw(Exporter);
+
+our(@EXPORT) = qw(action action_register action_alias);
+
 ############################################################################
 
-sub move_opaque {
+my(%ACTION, %ACTION_ALIAS);
 
-  my($window, $event) = @_;
-  my($frame, $client);
-  if ($window->isa('PerlWM::Frame')) {
-    $frame = $window;
-    $client = $frame->{client};
+############################################################################
+
+sub action_register {
+
+  my($action, $spec) = @_;
+  $spec ||= $action;
+  if (ref($spec) eq 'CODE') {
+    return $ACTION{$action} = $spec;
   }
-  elsif ($window->isa('PerlWM::Client')) {
-    $client = $window;
-    $frame = $client->{frame};
-  }
-  my $state = $event->{state};
-  if ($event->{drag} eq 'start') {
-    if ($frame) {
-      $frame->ConfigureWindow(stack_mode => 'Above');
+  foreach ($spec, "${spec}::start",
+	   "PerlWM::Action::Builtin::${spec}",
+	   "PerlWM::Action::Builtin::${spec}::start") {
+    next unless /^(.*)::([^:]+)$/;
+    my($class, $method) = ($1, $2);
+    if (my $code = eval qq{ require $class; 
+			    $class->can('$method'); }) {
+      return $ACTION{$action} = $code;
     }
-    $state->{orig_position} = $client->position();
   }
-  if ($event->{delta}->[0] && $event->{delta}->[1]) {
-    $client->configure(position => [$state->{orig_position}->[0] + $event->{delta}->[0],
-				    $state->{orig_position}->[1] + $event->{delta}->[1]])
-  }
-  return 1;
+  warn "action_register: failed to find code for '$spec'\n" 
+    unless $action eq $spec;
+  return;
 }
 
 ############################################################################
 
-sub resize_opaque {
+sub action_alias {
 
-  my($window, $event) = @_;
-  my($frame, $client);
-  if ($window->isa('PerlWM::Frame')) {
-    $frame = $window;
-    $client = $frame->{client};
+  my($alias, $action) = @_;
+  $ACTION_ALIAS{$action} = $alias;
+}
+
+############################################################################
+
+sub action {
+
+  my($action) = @_;
+  if (my $alias = $ACTION_ALIAS{$action}) {
+    $action = $alias;
   }
-  elsif ($window->isa('PerlWM::Client')) {
-    $client = $window;
-    $frame = $client->{frame};
+  my $spec = $ACTION{$action} || action_register($action);
+  if (!$spec) {
+    my $dummy = sub { warn "action '$action' not defined\n" };
+    $dummy->();
+    sleep(1);
+    return $dummy;
   }
-  my $state = $event->{state};
-  if ($event->{drag} eq 'start') {
-    if ($frame) {
-      $frame->ConfigureWindow(stack_mode => 'Above');
+  return $spec;
+}
+
+############################################################################
+
+sub new {
+
+  my($proto, %arg) = @_;
+  my $class = ref($proto) || $proto || __PACKAGE__;
+  my $self = bless { %arg }, $class;
+
+  $self->{x} ||= $arg{event}->{x};
+
+  die "need x" unless $self->{x};
+
+  if ($self->{target}) {
+    # cancel any current action on this window
+    if ($self->{target}->{action}) {
+      $self->{target}->{action}->cancel();
     }
-    $state->{orig_position} = $client->position();
-    $state->{orig_size} = $client->size();
-    my $click = [$event->{press}->{root_x}, $event->{press}->{root_y}];
-    my $middle = [$state->{orig_position}->[0] + ($state->{orig_size}->[0] / 2),
-		  $state->{orig_position}->[1] + ($state->{orig_size}->[1] / 2)];
-    $state->{direction} = [$click->[0] < $middle->[0] ? -1 : 1,
-			   $click->[1] < $middle->[1] ? -1 : 1];
+    # remember we are in progress
+    $self->{target}->{action} = $self;
+    # overlay our event table
+    $self->{target}->event_overlay($self);
   }
-  if ($event->{delta}->[0] && $event->{delta}->[1]) {
-    my $position = [@{$state->{orig_position}}];
-    my $size = [@{$state->{orig_size}}];
-    foreach (0,1) {
-      if ($state->{direction}->[$_] < 0) {
-	$position->[$_] += $event->{delta}->[$_];
-	$size->[$_] -= $event->{delta}->[$_];
-      }
-      else {
-	$size->[$_] += $event->{delta}->[$_];
-      }
-    }    
-    $client->configure(position => $position, size => $size);
+
+  if ($self->{grab}) {
+    die "need target" unless $self->{target};
+    if ($self->{grab} =~ /pointer/) {
+      $self->{x}->GrabPointer($self->{target}->{id}, 0, 
+			      scalar $self->{x}->event_window_mask($self),
+			      'Asynchronous', 'Asynchronous',
+			      'None', 'None', 'CurrentTime');
+
+      die "grab pointer\n";
+    }
+    if ($self->{grab} =~ /keyboard/) {
+      $self->{x}->GrabKeyboard($self->{target}->{id}, 0,
+			       'Asynchronous', 'Asynchronous',
+			       'CurrentTime');
+    }
+    # handy safety net
+    if ($ENV{PERLWM_DEBUG}) {
+      $SIG{ALRM} = sub { $self->cancel(); };
+      alarm(20);
+    }
   }
-  return 1;
+
+  return $self;
 }
 
 ############################################################################
 
-sub lower_window {
+sub finish {
 
-  my($window, $event) = @_;
-  my($frame, $client);
-  if ($window->isa('PerlWM::Frame')) {
-    $frame = $window;
-    $client = $frame->{client};
+  my($self) = @_;
+  # cancel the safety net
+  alarm(0) if $ENV{PERLWM_DEBUG};
+  $self->{target}->{action} = undef;
+  if ($self->{grab}) {
+    # undo any grabs
+    if ($self->{grab} =~ /pointer/) {
+      $self->{x}->UngrabPointer('CurrentTime');
+    }
+    if ($self->{grab} =~ /keyboard/) {
+      $self->{x}->UngrabKeyboard('CurrentTime');
+    }
   }
-  elsif ($window->isa('PerlWM::Client')) {
-    $client = $window;
-    $frame = $client->{frame};
-  }
-  $frame->ConfigureWindow(stack_mode => 'Below');
-  return 1;
 }
 
 ############################################################################
 
-sub raise_window {
+sub cancel {
 
-  my($window, $event) = @_;
-  my($frame, $client);
-  if ($window->isa('PerlWM::Frame')) {
-    $frame = $window;
-    $client = $frame->{client};
-  }
-  elsif ($window->isa('PerlWM::Client')) {
-    $client = $window;
-    $frame = $client->{frame};
-  }
-  $frame->ConfigureWindow(stack_mode => 'Above');
-  return 1;
-}
-
-
-############################################################################
-
-sub iconify_window {
-
-  my($window, $event) = @_;
-  my($frame, $client);
-  if ($window->isa('PerlWM::Frame')) {
-    $frame = $window;
-    $client = $frame->{client};
-  }
-  elsif ($window->isa('PerlWM::Client')) {
-    $client = $window;
-    $frame = $client->{frame};
-  }
-  $client->iconify();
+  my($self) = @_;
+  $self->finish();
 }
 
 ############################################################################
 
-sub deiconify_window {
-
-  my($window, $event) = @_;
-  return unless my $client = $window->{client};
-  $client->deiconify();
-}
-
-############################################################################
-
-sub move_icon_opaque {
-
-  my($window, $event) = @_;
-  my $state = $event->{state};
-  if ($event->{drag} eq 'start') {
-    $state->{orig_position} = $window->position();
-    $window->ConfigureWindow(stack_mode => 'Above');
-  }
-  if ($event->{delta}->[0] && $event->{delta}->[1]) {
-    $window->ConfigureWindow(x => $state->{orig_position}->[0] + $event->{delta}->[0],
-			     y => $state->{orig_position}->[1] + $event->{delta}->[1]);
-  }
-}
+sub EVENT { ( 'Key(Escape)' => 'cancel' ) }
 
 ############################################################################
 

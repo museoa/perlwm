@@ -1,6 +1,6 @@
 #
 # $Id$
-# 
+#
 
 package PerlWM::X::Event;
 
@@ -102,8 +102,8 @@ sub event_key_pack {
   return 0 unless @bits;
   my $result = 0;
   foreach (@bits) {
-    if (/^[ -~]$/) {
-      $result |= $self->keycode(ord($_)) << $KEY_SHIFT;
+    if (my $keysym = $self->key_string_to_sym($_)) {
+      $result |= $self->key_sym_to_code($keysym) << $KEY_SHIFT;
     }
     else {
       $result |= $ALL_BITS{$_};
@@ -128,14 +128,14 @@ sub event_timer {
 
   $arg ||= '';
   my $key = "$target.$arg";
-  
+
   # delete timer
   @{$self->{timer}} = grep { $_->[1] ne $key } @{$self->{timer}};
 
   if ($timeout) {
     # add timer
     @{$self->{timer}} = sort { $a->[0] <=> $b->[0] 
-			     } @{$self->{timer}}, [$timeout, $key, 
+			     } @{$self->{timer}}, [$timeout, $key,
 						   $target, $arg];
   }
 }
@@ -146,14 +146,18 @@ sub event_handler_parse {
 
   my($self, $hash, $event, $handler) = @_;
 
-  die unless ref $handler eq 'CODE';
+  unless (ref($handler) eq 'CODE') {
+    $handler ||= 'undef';
+    warn "event_handler_parse: not a code ref ($handler) for $event\n";
+    return;
+  }
 
   # look for event arguments
   my $arg;
   if ($event =~ s/\(([^\)]*)\)$//) {
     $arg = $1;
   }
-  
+
   # flatten event argument
   if ($event =~ $MOUSE_EVENT) {
     # pack buttons and modifiers
@@ -180,16 +184,16 @@ sub event_handler_parse {
 
 sub event_class {
 
-  my($self, $window) = @_;
+  my($self, $target) = @_;
 
-  my $class = ref $window;
+  my $class = ref $target;
   my $result = $self->{event}->{$class};
   if (!defined($result)) {
-    my $event = { eval "$class->EVENT()" };
+    my $event = { eval { $class->EVENT() } };
     die $@ if $@;
     $result = {};
     while (my($k, $v) = each %{$event}) {
-      $v = $window->can($v) unless ref $v;
+      $v = $target->can($v) unless ref $v;
       $self->event_handler_parse($result, $k, $v);
     }
     $self->{event}->{$class} = $result;
@@ -221,7 +225,7 @@ sub event_window_mask {
 	    else {
 	      $grab{$h} = { type => 'Button', 
 			    mods => ($_ & $MOD_MASK),
-			    button => $button, 
+			    button => $button,
 			    mask => $bmask };
 	    }
 	  }
@@ -233,7 +237,7 @@ sub event_window_mask {
 	foreach (keys %{$v}) {
 	  my $h = sprintf("K%08x", ($_ & ($MOD_MASK | $KEY_MASK)));
 	  $grab{$h} = { type => 'Key', 
-			mods => ($_ & $MOD_MASK), 
+			mods => ($_ & $MOD_MASK),
 			key => (($_ & $KEY_MASK) >> $KEY_SHIFT) };
 	}
       }
@@ -244,6 +248,47 @@ sub event_window_mask {
   }
   return $mask, values %grab if wantarray;
   return $mask;
+}
+
+############################################################################
+
+sub event_overlay {
+
+  my($self, $window, $overlay) = @_;
+  my $old_mask = $window->{event_mask} | ($window->{overlay_mask} || 0);
+  my $new_mask;
+  if ($window->{overlay} = $overlay) {
+    $overlay->{event_mask} ||= $self->event_window_mask($overlay);
+    $window->{overlay_mask} = $overlay->{event_mask};
+    $new_mask = $window->{event_mask} | $window->{overlay_mask};
+  }
+  else {
+    $window->{overlay_mask} = 0;
+    $new_mask = $window->{event_mask};
+  }
+  if ($new_mask != $old_mask) {
+    $self->ChangeWindowAttributes(id => $window->{id},
+				  event_mask => $new_mask);
+  }
+}
+
+############################################################################
+
+sub event_window_grab {
+
+  my($self, $window, @grab) = @_;
+  foreach (@grab) {
+    if ($_->{type} eq 'Button') {
+      $self->GrabButton($_->{mods}, $_->{button},
+			$window->{id}, 0, $_->{mask},
+			'Asynchronous', 'Asynchronous', 'None', 'None');
+    }
+    elsif ($_->{type} eq 'Key') {
+      $self->GrabKey($_->{key}, $_->{mods},
+		     $window->{id}, 0, 
+		     'Asynchronous', 'Asynchronous');
+    }
+  }
 }
 
 ############################################################################
@@ -272,8 +317,9 @@ sub event_trace {
 	"$_:".$self->atom_name($e->{$_});
       }
       elsif ($_ eq 'key') {
-	my $keysym = $self->keysym($e->{detail});
-	"$_:".sprintf("%c [c:%02x s:%02x]", $keysym, $e->{detail}, $keysym);
+	my $sym = $self->key_code_to_sym($e->{detail});
+	my $str = $self->key_sym_to_string($sym);
+	"$_:".sprintf("%s [c:%02x s:%04x]", $str, $e->{detail}, $sym);
       }
       elsif ($e->{$_} =~ /^\d+$/) {
 	"$_:".sprintf("0x%08x", $e->{$_});
@@ -302,7 +348,7 @@ sub event_loop {
   $self->{event_loop_started} = 1;
 
   my($bits, $time, $adjust, %event) = ('');
-  # we can use select because we override X11::Protocol::Connection::* 
+  # we can use select because we override X11::Protocol::Connection::*
   # to use sysread - see the end of PerlWM::X for more details
   vec($bits, fileno($self->{connection}->fh()), 1) = 1;
  event:
@@ -336,7 +382,7 @@ sub event_loop {
 	    # timeout - drop the timer
 	    shift @{$self->{timer}};
 	    # fake an event
-	    %event = ( name => 'Timer', event => $timer->[2], arg => $timer->[3] );
+	    %event = (name => 'Timer', event => $timer->[2], arg => $timer->[3]);
 	    # adjust by timer value if we don't have have time::hires
 	    $adjust = $timer->[0];
 	  }
@@ -359,8 +405,6 @@ sub event_loop {
       if (($event{name} =~ $X_MOUSE_EVENT) || 
 	  (($event{name} eq 'Timer') && ($event{event} eq $self->{mouse}))) {
 	my %fire;
-#	printf("%8.4f $event{name} $event{arg}\n", 
-#	       ($hires ? &{$hires}() : time()) - $stime);
 	if ($event{name} eq 'ButtonRelease') {
 	  if ($self->{mouse}->{drag} > $DRAG_THRESHOLD) {
 	    %fire = (%event, 
@@ -399,8 +443,8 @@ sub event_loop {
 	    $self->{mouse}->{drag_state} = { };
 	    $self->{mouse}->{click_count} = 0;
 	    $self->event_timer(0, $self->{mouse});
-	    %fire = (%event, 
-		     name => 'Drag', 
+	    %fire = (%event,
+		     name => 'Drag',
 		     state => $self->{mouse}->{drag_state},
 		     event => $self->{mouse}->{target},
 		     press => $self->{mouse}->{press},
@@ -412,7 +456,7 @@ sub event_loop {
 	  }
 	  elsif ($self->{mouse}->{drag} > $DRAG_THRESHOLD) {
 	    %fire = (%event, 
-		     name => 'Drag', 
+		     name => 'Drag',
 		     state => $self->{mouse}->{drag_state},
 		     event => $self->{mouse}->{target},
 		     press => $self->{mouse}->{press},
@@ -446,20 +490,31 @@ sub event_loop {
 	  # build the arg up from the mods/key
 	  $event{arg} = (($event{state} & $MOD_MASK) |
 			 ($event{detail} << $KEY_SHIFT));
+	  # put the keysym back
+	  $event{sym} = $self->key_code_to_sym($event{detail});
+	  $event{string} = $self->key_sym_to_string($event{sym});
 	}
       }
       # dispatch the event
-      my($id, $window, $target);
+      my($id, $window, $target, $method);
       my($name, $arg) = ($event{name}, $event{arg});
       # use various event window fields
       foreach my $field (qw(event child window parent)) {
 	next unless $id = $event{$field};
 	next unless $window = $self->{window}->{$id};
-	next unless $target = $self->{event}->{ref $window}->{$name};
-	next unless (!defined($arg)) || ($target = $target->{$arg});
-	@event{qw(window x)} = ($window, $self);
-	eval { $target->($window, \%event); };
-	warn "$target - $@" if $@;
+	foreach ($window->{overlay}, $window) {
+	  next unless defined;
+	  next unless $method = $self->event_class($_)->{$name};
+	  next unless ((!defined($arg)) || ($method = $method->{$arg}));
+	  if ($method) {
+	    $target = $_;
+	    last;
+	  }
+	}
+	next unless $target && $method;
+	@event{qw(target window x)} = ($target, $window, $self);
+	eval { $method->($target, \%event); };
+	warn "$target/$method - $@" if $@;
 	next event;
       }
     }

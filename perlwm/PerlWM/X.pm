@@ -6,35 +6,15 @@ package PerlWM::X;
 
 ############################################################################
 
-=pod
-
-Notes
-=====
-
- obj => a x server object like - color (pixel), font, gc, or image. 
-
- name => a re-usable name for a object - like 'title'
-         (the same name can be used for multiple types of resource
-          so 'title' could refer to a font, a color and a gc)
-
- spec => the specification of the object - like 'red' or 'lucida'
-
- id   => the x resource id
-
- info => information about object - like font metrics, or image sizes
-
-=cut
-
-############################################################################
-
 use strict;
 use warnings;
 use base qw(X11::Protocol
 	    PerlWM::X::Event
 	    PerlWM::X::Object
-	    PerlWM::X::Color 
-	    PerlWM::X::Image 
-	    PerlWM::X::Font 
+	    PerlWM::X::Color
+	    PerlWM::X::Image
+	    PerlWM::X::Font
+	    PerlWM::X::Key
 	    PerlWM::X::GC);
 
 use PerlWM::X::Window;
@@ -51,14 +31,14 @@ sub new {
 
   if ($args{debug}) {
     # super cool x debugging - you've never had it so good
-    eval q{ 
+    eval q{
       sub assemble_request {
 	my($self, @args) = @_;
 	my $cd = ((caller(2))[3] =~ /AUTOLOAD/) ? 2 : 1;
 	$self->{debug}->{$self->{sequence_num}} = join ':',(caller($cd))[1,2];
 	$self->SUPER::assemble_request(@args);
       }
-    }; 
+    };
     die $@ if $@;
   }
 
@@ -154,37 +134,6 @@ sub alien {
   my($self, $id) = @_;
   $id &= (-1 ^ $self->{resource_id_mask});
   return ($id != $self->{resource_id_base});
-}
-
-############################################################################
-
-sub keycode {
-
-  my($self, $keysym) = @_;
-  unless ($self->{keycode}) {
-    my(@keys) = 
-      $self->GetKeyboardMapping($self->{min_keycode}, 
-				$self->{max_keycode} - $self->{min_keycode});
-    my $keycode = $self->{min_keycode}; 
-    foreach my $ks (@keys) {
-      foreach (@{$ks}) {
-	next unless $_;
-	push @{$self->{keycode}->{$keycode}}, $_;
-	push @{$self->{keysym}->{$_}}, $keycode;
-      }
-      $keycode++;
-    }
-  }
-  return $self->{keysym}->{$keysym}->[0];
-}
-
-############################################################################
-
-sub keysym {
-
-  my($self, $keycode) = @_;
-  $self->keycode(0) unless $self->{keycode};
-  return $self->{keycode}->{$keycode}->[0];
 }
 
 ############################################################################

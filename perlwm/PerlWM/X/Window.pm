@@ -78,6 +78,7 @@ sub create {
 
   $self->{id} = $self->{x}->new_rsrc();
   $self->CreateWindow(@args, %args);
+  $self->{event_mask} = $args{event_mask};
   $self->attach();
 }
 
@@ -86,7 +87,6 @@ sub create {
 sub destroy {
 
   my($self) = @_;
-
   $self->detach();
   $self->DestroyWindow();
 }
@@ -96,8 +96,23 @@ sub destroy {
 sub event_mask {
 
   my($self, $mask) = @_;
-
   return $self->{x}->event_window_mask($self, $mask);
+}
+
+############################################################################
+
+sub event_grab {
+
+  my($self, @grab) = @_;
+  return $self->{x}->event_window_grab($self, @grab);
+}
+
+############################################################################
+
+sub event_overlay {
+
+  my($self, $overlay) = @_;
+  return $self->{x}->event_overlay($self, $overlay);
 }
 
 ############################################################################

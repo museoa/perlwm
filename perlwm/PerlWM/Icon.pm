@@ -1,6 +1,6 @@
 #
 # $Id$
-# 
+#
 
 package PerlWM::Icon;
 
@@ -10,6 +10,7 @@ use strict;
 use warnings;
 use base qw(PerlWM::X::Window);
 
+use PerlWM::Action;
 use PerlWM::Widget::Label;
 
 ############################################################################
@@ -53,17 +54,14 @@ sub new {
 
 ############################################################################
 
-use PerlWM::Action;
-
 sub EVENT {
 
-  return ('Drag(Button1)' => \&PerlWM::Action::move_icon_opaque,
-	  'Drag(Mod1 Button1)' => \&PerlWM::move_icon_opaque,
-	  'Click(Button1)', \&PerlWM::Action::deiconify_window,
-	  'Click(Double Button1)', \&PerlWM::Action::deiconify_window);
-
+  return ('Drag(Button1)' => action('move_icon_opaque'),
+	  'Drag(Mod1 Button1)' => action('move_icon_opaque'),
+	  'Click(Button1)', action('deiconify_window'),
+	  'Click(Double Button1)', action('deiconify_window'));
 }
- 
+
 ############################################################################
 
 1;

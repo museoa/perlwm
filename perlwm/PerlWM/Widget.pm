@@ -1,6 +1,6 @@
 #
 # $Id$
-# 
+#
 
 package PerlWM::Widget;
 

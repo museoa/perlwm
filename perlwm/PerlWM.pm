@@ -1,6 +1,6 @@
 #
 # $Id$
-# 
+#
 
 package PerlWM;
 
@@ -16,6 +16,7 @@ use PerlWM::Icon;
 use PerlWM::Frame;
 use PerlWM::Client;
 use PerlWM::Widget;
+use PerlWM::Action;
 
 ############################################################################
 

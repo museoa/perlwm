@@ -1,6 +1,6 @@
 #
 # $Id$
-# 
+#
 
 package PerlWM::Frame;
 
@@ -10,6 +10,7 @@ use strict;
 use warnings;
 use base qw(PerlWM::X::Window);
 
+use PerlWM::Action;
 use PerlWM::Widget::Label;
 
 ############################################################################
@@ -45,8 +46,8 @@ sub new {
 
   my %geom = $self->{client}->GetGeometry();
 
-  my($mask, @grab) = $self->{client}->event_mask();
-  
+  my($mask, @grab) = $self->event_mask();
+
   $mask |= $self->{x}->pack_event_mask('SubstructureNotify',
 				       'SubstructureRedirect');
 
@@ -55,23 +56,12 @@ sub new {
 		width => $geom{width} + 4,
 		height => $geom{height} + 4 + 20,
 		background_pixel => $BLEND[0],
-		event_mask => scalar $self->event_mask($mask));
+		event_mask => $mask);
+
+  # grab things (but not things without modifiers)
+  $self->event_grab(grep $_->{mods}, @grab);
 
   $self->{blend} = [0, 0];
-  
-  foreach (@grab) {
-    # set up grabs from the client
-    if ($_->{type} eq 'Button') {
-      $self->{x}->GrabButton($_->{mods}, $_->{button}, 
-			     $self->{id}, 0, $_->{mask},
-			     'Asynchronous', 'Asynchronous', 'None', 'None');
-    }
-    elsif ($_->{type} eq 'Key') {
-      $self->{x}->GrabKey($_->{key}, $_->{mods}, 
-			  $self->{id}, 0, 
-			  'Asynchronous', 'Asynchronous');
-    }
-  }
 
   $self->{label} = PerlWM::Widget::Label->new(x => $self->{x},
 					      padding => 2,
@@ -103,7 +93,7 @@ sub configure {
     $arg{size} = [$size->[0] + 4, $size->[1] + 4 + 20];
   }
   if (my $position = $client{position}) {
-    $arg{position} = [$position->[0] - 2, $position->[1] - 20];
+    $arg{position} = [$position->[0] - 2, $position->[1] - 22];
   }
 
   if (my $size = delete $arg{size}) {
@@ -114,7 +104,7 @@ sub configure {
     $arg{x} = $position->[0];
     $arg{y} = $position->[1];
   }
-  
+
   $arg{stack_mode} = $client{stack_mode} if $client{stack_mode};
 
   if (%arg) {
@@ -128,11 +118,11 @@ sub configure {
 ############################################################################
 
 sub configure_request {
-  
+
   my($self, $event) = @_;
   my $xe = $event->{xevent};
   $self->{x}->ConfigureWindow($xe->{window},
-			      map { exists $xe->{$_}?($_=>$xe->{$_}):() 
+			      map { exists $xe->{$_}?($_=>$xe->{$_}):()
 				  } qw(x y width height 
 				       border_width sibling stack_mode));
   if (defined($xe->{width}) && defined($xe->{height})) {
@@ -147,7 +137,7 @@ sub blend {
   my($self, $start) = @_;
   my $blend = $self->{blend};
   if (defined($start) && (!ref($start))) {
-    if ((($start == -1) && ($blend->[0] == 0) || 
+    if ((($start == -1) && ($blend->[0] == 0) ||
 	 ($start == 1) && ($blend->[0] == $#BLEND))) {
       # already there
       return;
@@ -157,7 +147,7 @@ sub blend {
   $blend->[0] += $blend->[1];
   $self->ChangeWindowAttributes(background_pixel => $BLEND[$blend->[0]]);
   $self->ClearArea();
-  if ((($blend->[1] == -1) && ($blend->[0] == 0) || 
+  if ((($blend->[1] == -1) && ($blend->[0] == 0) ||
        ($blend->[1] == 1) && ($blend->[0] == $#BLEND))) {
     # made it
     $blend->[1] = 0;
@@ -251,38 +241,35 @@ sub prop_wm_name {
 
 ############################################################################
 
-use PerlWM::Action;
+action_register('keyboard_move', 'PerlWM::Action::Move');
 
-sub EVENT {
-  return (
-	  # TODO: load these bindings via some config stuff
-	  'Drag(Button1)' => \&PerlWM::Action::move_opaque,
-	  'Drag(Mod1 Button1)' => \&PerlWM::Action::move_opaque,
+sub EVENT { ( __PACKAGE__->SUPER::EVENT,
 
-	  'Click(Button1)' => \&PerlWM::Action::raise_window,
-	  'Click(Mod1 Button1)' => \&PerlWM::Action::raise_window,
+	      # TODO: load these bindings via some config stuff
+	     'Drag(Button1)' => action('move_opaque'),
+	     'Drag(Mod1 Button1)' => action('move_opaque'),
 
-	  'Click(Button3)' => \&PerlWM::Action::iconify_window,
-	  'Click(Mod1 Button3)' => \&PerlWM::Action::iconify_window,
+	     'Click(Button1)' => action('raise_window'),
+	     'Click(Mod1 Button1)' => action('raise_window'),
 
-	  'Drag(Button2)' => \&PerlWM::Action::resize_opaque,
-	  'Drag(Mod1 Button2)' => \&PerlWM::Action::resize_opaque,
+	     'Click(Button3)' => action('iconify_window'),
+	     'Click(Mod1 Button3)' => action('iconify_window'),
 
-	  'Key(Mod4 m)' => sub { print "key(f)\n" },
+	     'Drag(Button2)' => action('resize_opaque'),
+	     'Drag(Mod1 Button2)' => action('resize_opaque'),
 
-	  # TODO: config for focus policy
-	  'Enter' => \&enter,
-	  'Leave' => \&leave,
-	  'Timer(Raise)' => \&auto_raise,
-	  'Timer(Blend)' => \&blend,
+	     'Key(Mod4 m)' => action('keyboard_move'),
 
-	  'ConfigureRequest' => \&configure_request,
-	  'DestroyNotify' => \&destroy_notify,
-	  'MapNotify' => \&map_notify,
-	  'UnmapNotify' => \&unmap_notify,
+	     # TODO: config for focus policy
+	     'Enter' => \&enter,
+	     'Leave' => \&leave,
+	     'Timer(Raise)' => \&auto_raise,
+	     'Timer(Blend)' => \&blend,
 
-	  __PACKAGE__->SUPER::EVENT);
-}
+	     'ConfigureRequest' => \&configure_request,
+	     'DestroyNotify' => \&destroy_notify,
+	     'MapNotify' => \&map_notify,
+	     'UnmapNotify' => \&unmap_notify ) }
 
 ############################################################################
 
