@@ -56,7 +56,8 @@ sub resize_by {
     }
   }
   $self->{target}->configure(size => $self->{size},
-			     position => $self->{position});
+			     position => $self->{position},
+			     anchor => $self->{edge});
 }
 
 ############################################################################

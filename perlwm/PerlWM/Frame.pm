@@ -85,14 +85,6 @@ sub new {
 
 ############################################################################
 
-sub resize {
-
-  my($self, %arg) = @_;
-  $self->check_size_hints($arg{size}) if $arg{size};
-}
-
-############################################################################
-
 sub geom {
 
   my($self, %geom) = @_;
@@ -133,7 +125,18 @@ sub configure {
 
   my(%frame, %client);
   my($size, $position) = @arg{qw(size position)};
+  
   if ($size) {
+    my $orig = [@{$size}];
+    $size = $self->check_size_hints($size);
+    if ((my $anchor = $arg{anchor}) && 
+	(($size->[0] != $orig->[0]) ||
+	 ($size->[1] != $orig->[1]))) {
+      $position ||= $self->position();
+      $position = [@{$position}];
+      $position->[$_] += (($size->[$_] - $orig->[$_]) * 
+			  (($anchor->[$_] < 0) ? -1 : 0)) for (0, 1);
+    }
     $frame{width} = $size->[0] + 4;
     $frame{height} = $size->[1] + 4 + 20;
     $client{width} = $size->[0];
@@ -309,19 +312,21 @@ sub check_size_hints {
 
   my($self, $size) = @_;
 
-  return unless my $hints = $self->{prop}->{WM_NORMAL_HINTS};
-
-  foreach (0,1) {
-    if (my $min = $hints->{PMinSize}) {
-      $size->[$_] = $min->[$_] if $size->[$_] < $min->[$_];
-    }
-    if (my $inc = $hints->{PResizeInc}) {
-      my $base = $hints->{PBaseSize};
-      $size->[$_] -= $base->[$_] if $base;
-      $size->[$_] = $inc->[$_] * (int($size->[$_] / $inc->[$_]));
-      $size->[$_] += $base->[$_] if $base;
+  if (my $hints = $self->{client}->{prop}->{WM_NORMAL_HINTS}) {
+    $size = [@{$size}];
+    foreach (0,1) {
+      if (my $min = $hints->{PMinSize}) {
+	$size->[$_] = $min->[$_] if $size->[$_] < $min->[$_];
+      }
+      if (my $inc = $hints->{PResizeInc}) {
+	my $base = $hints->{PBaseSize};
+	$size->[$_] -= $base->[$_] if $base;
+	$size->[$_] = $inc->[$_] * (int($size->[$_] / $inc->[$_]));
+	$size->[$_] += $base->[$_] if $base;
+      }
     }
   }
+  return $size;
 }
 
 ############################################################################

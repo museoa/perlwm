@@ -78,7 +78,9 @@ sub resize_opaque {
 	$size->[$_] += $event->{delta}->[$_];
       }
     }
-    $frame->configure(position => $position, size => $size);
+    $frame->configure(position => $position, 
+		      size => $size,
+		      anchor => $state->{direction});
   }
   return 1;
 }
