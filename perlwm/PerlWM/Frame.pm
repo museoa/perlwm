@@ -146,15 +146,12 @@ sub configure {
     $client{x} = $position->[0];
     $client{y} = $position->[1];
   }
-  # TODO: move this - make configure just size/position?
   if (%arg) {
-    print "frame size = $frame{width} $frame{height}\n" if $arg{size};
     $self->ConfigureWindow(%frame);
     $self->geom(%frame);
     $self->{label}->ConfigureWindow(width => $frame{width} - 4) 
       if $frame{width};
-    $size ||= $self->geom()->{size};
-    print "size = @{$size}\n"; 
+    $size ||= $self->size();
     my %event = ( name => 'ConfigureNotify',
 		  window => $self->{client}->{id},
 		  event => $self->{client}->{id},
@@ -167,7 +164,6 @@ sub configure {
 		  override_redirect => 0 );
     $self->{client}->SendEvent(0, 'StructureNotify', 
 			       $self->{x}->pack_event(%event));
-    print "configuring client @{$size}\n" if $arg{size};
     $self->{client}->ConfigureWindow(width => $size->[0],
 				     height => $size->[1]) if $arg{size};
   }
@@ -178,7 +174,6 @@ sub configure {
 sub configure_request {
 
   my($self, $event) = @_;
-  print "configure_request\n";
   my $xe = $event->{xevent};
   $self->{x}->ConfigureWindow($xe->{window},
 			      map { exists $xe->{$_}?($_=>$xe->{$_}):()
