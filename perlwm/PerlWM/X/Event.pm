@@ -421,6 +421,7 @@ sub event_loop {
     else {
       # just wait for the next event
       %event = $self->next_event();
+      $self->{timestamp} = $event{time} if $event{time};
     }
     if (%event) {
       $self->event_trace(\%event);
