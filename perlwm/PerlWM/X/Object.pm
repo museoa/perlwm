@@ -9,7 +9,7 @@ package PerlWM::X::Object;
 use strict;
 use warnings;
 
-use Storable qw(freeze);
+use Storable qw(nfreeze);
 
 use PerlWM::Config;
 
@@ -36,7 +36,7 @@ sub object_add {
 
   my($self, $type, $name, $spec, $id, $info) = @_;
 
-  $spec = freeze($spec) if ref $spec;
+  $spec = nfreeze($spec) if ref $spec;
 
   if ($spec) {
     $self->{name}->{$type}->{spec}->{$name} = $spec if $name;
@@ -58,7 +58,7 @@ sub object_get {
 
   my($self, $type, $name, $spec) = @_;
 
-  $spec = freeze($spec) if ref $spec;
+  $spec = nfreeze($spec) if ref $spec;
 
   my $id;
   if ($name && defined($id = $self->{name}->{$type}->{id}->{$name})) {
