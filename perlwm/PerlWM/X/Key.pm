@@ -11,11 +11,13 @@ use warnings;
 
 ############################################################################
 
-my %KEYSYM =
+my %KEYSYM =			# keysymdef.h
   ( Backspace => 0xff08, Tab => 0xff09, Enter => 0xff0d,
     Escape => 0xff1b, Home => 0xff50, Left => 0xff51,
     Up => 0xff52, Right => 0xff53, Down => 0xff54,
-    PageUp => 0xff55, PageDown => 0xff56, End => 0xff57 );
+    PageUp => 0xff55, PageDown => 0xff56, End => 0xff57,
+    Delete => 0xffff
+  );
 
 my %RKEYSYM = reverse %KEYSYM;
 
