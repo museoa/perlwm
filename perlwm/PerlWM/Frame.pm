@@ -241,8 +241,10 @@ sub focus {
   return unless my $client = $self->{client};
   return if $self->{perlwm}->{focus} == $self;
 
+  $client->SetInputFocus('PointerRoot', 'CurrentTime');
   if ($self->wm_protocol_check('WM_TAKE_FOCUS')) {
-    $self->{perlwm}->SetInputFocus('PointerRoot', 'CurrentTime');
+    # force a sync
+    $self->{x}->GetInputFocus();
     my %event = ( name => 'ClientMessage',
 		  window => $self->{client}->{id},
 		  type => $self->{x}->atom('WM_PROTOCOLS'),
@@ -252,9 +254,6 @@ sub focus {
 			       $self->{x}->{timestamp}) );
     $client->SendEvent(0, $self->{x}->pack_event_mask('ClientMessage'),
 		       $self->{x}->pack_event(%event));
-  }
-  else {
-    $client->SetInputFocus('PointerRoot', 'CurrentTime');
   }
   $self->{perlwm}->{focus} = $self;
 }
@@ -281,7 +280,7 @@ sub leave {
   return unless $event->{mode} eq 'Normal';
   return unless $self->{perlwm}->{focus} == $self;
 
-  $self->{perlwm}->SetInputFocus('PointerRoot', 'CurrentTime');
+  $self->{perlwm}->SetInputFocus('PointerRoot', $self->{x}->{timestamp});
   $self->{perlwm}->{focus} = $self->{perlwm};
   $self->blend(-1);
   $self->timer_set(0, 'Raise');
