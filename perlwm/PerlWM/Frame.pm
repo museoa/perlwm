@@ -46,8 +46,11 @@ sub new {
   $self->{client}->ChangeWindowAttributes(do_not_propogate_mask => $input);
 
   $self->{client}->event_overlay_add($self);
+  
+  my $previous_state = ($self->{client}->{prop}->{WM_STATE} &&
+			$self->{client}->{prop}->{WM_STATE}->{state});
 
-  $self->{client}->{prop}->{WM_STATE} = { state => 'Normal' };
+  $self->{client}->{prop}->{WM_STATE} = { state => ($previous_state || 'Normal') };
 
   $self->{x}->ChangeSaveSet('Insert', $self->{client_id});
 
@@ -88,7 +91,12 @@ sub new {
 
   push @{$self->{perlwm}->{frames}}, $self;
 
-  $self->MapWindow();
+  if ($previous_state && ($previous_state eq 'Iconic')) {
+    $self->iconify();
+  }
+  else {
+    $self->MapWindow();
+  }
 
   return $self;
 }
@@ -227,22 +235,21 @@ sub blend {
 
 ############################################################################
 
-sub enter {
+sub focus {
 
   my($self, $event) = @_;
   return unless my $client = $self->{client};
-  return if $event->{detail} eq 'Inferior';
-  return if $event->{mode} eq 'Grab';
   return if $self->{perlwm}->{focus} == $self;
-  
-  if (grep /WM_TAKE_FOCUS/, @{$client->{prop}->{WM_PROTOCOLS}}) {
+
+  if ($self->wm_protocol_check('WM_TAKE_FOCUS')) {
+    $self->{perlwm}->SetInputFocus('PointerRoot', 'CurrentTime');
     my %event = ( name => 'ClientMessage',
 		  window => $self->{client}->{id},
 		  type => $self->{x}->atom('WM_PROTOCOLS'),
 		  format => 32,
 		  data => pack('L5', 
 			       $self->{x}->atom('WM_TAKE_FOCUS'), 
-			       $event->{time}) );
+			       $self->{x}->{timestamp}) );
     $client->SendEvent(0, $self->{x}->pack_event_mask('ClientMessage'),
 		       $self->{x}->pack_event(%event));
   }
@@ -250,8 +257,17 @@ sub enter {
     $client->SetInputFocus('PointerRoot', 'CurrentTime');
   }
   $self->{perlwm}->{focus} = $self;
-  $self->blend(1);
+}
 
+############################################################################
+
+sub enter {
+
+  my($self, $event) = @_;
+  return if $event->{detail} eq 'Inferior';
+  return if $event->{mode} eq 'Grab';
+  $self->focus();
+  $self->blend(1);
   $self->timer_set(10000, 'Raise');
 }
 
@@ -288,6 +304,7 @@ sub destroy_notify {
   $self->{client}->detach(destroyed => 1);
   $self->{client} = undef;
   $self->destroy();
+  $self->{perlwm}->{frames} = [ grep $_ != $self, @{$self->{perlwm}->{frames}} ];
 }
 
 ############################################################################
@@ -295,6 +312,7 @@ sub destroy_notify {
 sub map_notify {
 
   my($self, $event) = @_;
+  return if $self->{client}->{prop}->{WM_STATE}->{state} eq 'Iconic';
   $self->MapWindow();
 }
 
@@ -336,7 +354,7 @@ sub delete_or_destroy {
   my($self) = @_;
   return unless my $client = $self->{client};
   
-  if (grep /WM_DELETE_WINDOW/, @{$client->{prop}->{WM_PROTOCOLS}}) {
+  if ($self->wm_protocol_check('WM_DELETE_WINDOW')) {
     my %event = ( name => 'ClientMessage',
 		  window => $self->{client}->{id},
 		  type => $self->{x}->atom('WM_PROTOCOLS'),
@@ -416,6 +434,21 @@ sub warp_to {
     $position->[$_] += $size->[$_] if $position->[$_] < 0;
   }
   $self->{x}->WarpPointer('None', $self->{id}, 0, 0, 0, 0, @{$position});
+  $self->focus();
+}
+
+############################################################################
+
+sub wm_protocol_check {
+
+  my($self, $protocol) = @_;
+  return 0 unless my $client = $self->{client};
+  return 0 unless my $prop = $client->{prop}->{WM_PROTOCOLS};
+  $prop = [$prop] unless ref $prop;
+  foreach (@{$prop}) {
+    return 1 if $_ eq $protocol;
+  }
+  return 0;
 }
 
 ############################################################################
