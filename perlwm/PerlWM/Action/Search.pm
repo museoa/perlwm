@@ -12,7 +12,33 @@ use base qw(PerlWM::Action);
 
 ############################################################################
 
-my %COLOR = ( match => '#0000ff', select => '#00ff00', nomatch => '#ffffff' );
+sub setup {
+
+  my($self) = @_;
+  return unless my $x = $self->{x};
+
+  $x->color_add('search_popup_border', '#00ff00');
+  $x->color_add('search_popup_background', 'black');
+  $x->color_add('search_popup_input', '#eeeeee');
+  $x->color_add('search_popup_match', '#8080ff');
+  $x->color_add('search_popup_select', '#00ff00');
+  $x->font_add('search_popup_font', 
+	       '-b&h-lucida-medium-r-normal-*-*-100-*-*-p-*-iso8859-1');
+
+  $x->color_add('search_frame_match', '#8080ff');
+  $x->color_add('search_frame_select', '#00ff00');
+  $x->color_add('search_frame_nomatch', '#ffffff');
+  $x->color_add('search_frame_focus', '#ff0000');
+
+  foreach (qw(input match select)) {
+    $x->gc_add("search_popup_$_", 
+	       { font => 'search_popup_font',
+		 foreground => "search_popup_${_}",
+		 background => 'black' } );
+  }
+  
+  *onetime = sub { };
+}
 
 ############################################################################
 
@@ -22,31 +48,27 @@ sub start {
   my $self = __PACKAGE__->SUPER::new(target => $target,
 				     event => $event,
 				     grab => 'keyboard');
-
+  $self->setup();
+  
   $self->{text} = '';
   $self->{select} = 0;
   $self->{case_insensitive} = 1;
   $self->{frames} = $target->{perlwm}->{frames};
   $self->{match} = [@{$self->{frames}}];
 
-  $self->{popup} = PerlWM::Action::Search::Popup->new(x => $target->{x});
-
-  $self->{popup}->clear();
-  $self->{popup}->MapWindow();
-
-  while (my($k, $v) = each %COLOR) {
-    $self->{color}->{$k} = $self->{x}->object_get('color', $v, $v);
-  }
+  $self->{popup} = PerlWM::Action::Search::Popup->new
+    (x => $target->{x}, search => $self);
+  $self->{popup}->update();
 
   return $self;
 }
 
 ############################################################################
 
-sub highlight {
+sub highlight_frame {
 
-  my($self, $frame, $color) = @_;
-  return unless $color = $self->{color}->{$color};
+  my($self, $frame, $type) = @_;
+  return unless my $color = $self->{x}->color_get("search_frame_$type");
   $frame->ChangeWindowAttributes(background_pixel => $color);
   $frame->ClearArea();
   if ($frame->{icon}) {
@@ -60,7 +82,7 @@ sub highlight {
 sub finish {
 
   my($self) = @_;
-  $self->highlight($_, 'nomatch') for @{$self->{frames}};
+  $self->highlight_frame($_, 'nomatch') for @{$self->{frames}};
   $self->{popup}->UnmapWindow();
   $self->{popup}->DestroyWindow();
   $self->SUPER::finish();
@@ -71,20 +93,19 @@ sub finish {
 sub show {
 
   my($self) = @_;
-  # TODO: display this information in the popup?
-#  print "search: $self->{text}\n";
-#  print "error: $self->{error}\n" if $self->{error};
+
   my %seen;
   for (my $index = 0; $index <= $#{$self->{match}}; $index++) { 
     my $frame = $self->{match}->[$index];
-    my $color = ($index == $self->{select} ? 'select' : 'match');
-    $self->highlight($frame, $color);
+    my $type = ($index == $self->{select} ? 'select' : 'match');
+    $self->highlight_frame($frame, $type);
     $seen{$frame->{id}}++;
   }
   foreach my $frame (@{$self->{frames}}) {
     next if $seen{$frame->{id}};
-    $self->highlight($frame, 'nomatch');
+    $self->highlight_frame($frame, 'nomatch');
   }
+  $self->{popup}->update();
 }
 
 ############################################################################
@@ -157,12 +178,14 @@ sub toggle_case {
 sub enter {
 
   my($self) = @_;
+  $self->finish();
   if (my $select = $self->{match}->[$self->{select}]) {
     $select->deiconify();
     $select->ConfigureWindow(stack_mode => 'Above');
+    $self->highlight_frame($select, 'focus');
     $select->warp_to([-10, 10]);
+    $select->enter();
   }
-  $self->finish();
 }
 
 ############################################################################
@@ -192,41 +215,77 @@ sub new {
   my $class = ref $proto || $proto || __PACKAGE__;
   my $self = $class->SUPER::new(%arg);
 
+  die unless my $x = $self->{x};
+
   $self->create(x => 2, y => 2,
-		width => 25, height => 10,
+		# TODO: what width? (auto resize?)
+		width => 100, 
+		height => 1,
 		border_width => 2,
-		background_pixel => $self->{x}->{black_pixel},
-		border_pixel => $self->{x}->object_get('color',
-						       '#00ff00',
-						       '#00ff00'));
+		background_pixel => $x->color_get('search_popup_background'),
+		border_pixel => $x->color_get('search_popup_border'));
 
-  $self->{gc} = $self->{x}->gc_get('widget');
-  $self->{ascent} = $self->{x}->font_info('widget_font')->{font_ascent};
-  $self->{descent} = $self->{x}->font_info('widget_font')->{font_descent};
-  $self->{font} = $self->{x}->font_get('widget_font');
+  my $font_info = $x->font_info('search_popup_font');
 
+  $self->{ascent} = $font_info->{font_ascent};
+  $self->{descent} = $font_info->{font_descent};
+  $self->{font} = $x->font_get('widget_font');
+
+  $self->{padding} = 2;
+  $self->{row_height} = (($self->{ascent} + $self->{descent}) + 
+			 (2 * $self->{padding}));
+
+  $self->{rows_max} = 10;
+
+  $self->{rows} = 0;
 
   return $self;
 }
 
 ############################################################################
 
-sub clear {
+sub update {
 
+  my($self) = @_;
+  my $rows = scalar @{$self->{search}->{match}} + 1;
+  $rows = $self->{rows_max} if $rows > $self->{rows_max};
+  if ($rows != $self->{rows}) {
+    $self->ConfigureWindow(height => $self->{row_height} * $rows);
+    $self->MapWindow() unless $self->{rows};
+    $self->{rows} = $rows;
+  }
+  $self->draw();
 }
 
 ############################################################################
 
-sub expose {
+sub draw {
 
-  
+  my($self) = @_;
 
+  $self->ClearArea();
+
+  return unless my $search = $self->{search};
+
+  my $y = $self->{padding} + $self->{ascent};
+  if ($search->{text}) {
+    $self->PolyText8($self->{x}->gc_get('search_popup_input'),
+		     $self->{padding}, $y,
+		     [0, $search->{text}]);
+  }
+  for (my $index = 0; $index <= $#{$search->{match}}; $index++) { 
+    $y += $self->{row_height};
+    my $type = ($index == $search->{select} ? 'select' : 'match');
+    $self->PolyText8($self->{x}->gc_get('search_popup_'.$type),
+		     $self->{padding}, $y,
+		     [0, $search->{match}->[$index]->{name}]);
+  }
 }
 
 ############################################################################
 
 sub EVENT { (__PACKAGE__->SUPER::EVENT,
-	     'Expose' => 'expose') }
+	     'Expose' => 'draw') }
 
 ############################################################################
 
