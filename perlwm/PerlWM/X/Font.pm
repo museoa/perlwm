@@ -23,10 +23,22 @@ sub font_init {
 sub font_create {
 
   my($self, $spec) = @_;
-  
-  my $id = $self->new_rsrc();
-  $self->OpenFont($id, $spec);
-  return $id;
+
+  # TODO: come up with a better (generic) error handling strategy
+  my($id, %info) = $self->new_rsrc();
+  local $self->{die_on_error} = 1;
+  foreach ($spec, 'fixed') {
+    eval { 
+      $self->OpenFont($id, $_); 
+      %info = $self->QueryFont($id);
+    };
+    if ($@ && ($@ =~ /^OpenFont/)) {
+      eval { $self->handle_input(); };
+      die unless $@ && $@ =~ /^QueryFont/;
+    }
+    last unless $@;
+  }
+  return ($id, \%info);
 }
 
 ############################################################################
