@@ -47,6 +47,8 @@ sub finish {
 sub show {
 
   my($self) = @_;
+  # TODO: display this information in the popup
+  return;
   print "search: $self->{text}\n";
   print "error: $self->{error}\n" if $self->{error};
   for (my $index = 0; $index <= $#{$self->{match}}; $index++) { 
@@ -163,8 +165,8 @@ sub new {
   my $class = ref $proto || $proto || __PACKAGE__;
   my $self = $class->SUPER::new(%arg);
 
-  $self->create(x => 100, y => 100,
-		width => 100, height => 100,
+  $self->create(x => 2, y => 2,
+		width => 25, height => 10,
 		border_width => 2,
 		background_pixel => $self->{x}->{black_pixel},
 		border_pixel => $self->{x}->object_get('color',
