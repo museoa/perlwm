@@ -18,6 +18,8 @@ use PerlWM::X;
 use PerlWM::Frame;
 use PerlWM::Client;
 
+use PerlWM::Widget;
+
 ############################################################################
 
 sub perlwm {
@@ -27,7 +29,12 @@ sub perlwm {
   my $self = { %args };
   bless $self, $class;
 
-  $self->{x} = PerlWM::X->new($ENV{DISPLAY});
+  $self->{x} = PerlWM::X->new(display => $ENV{DISPLAY},
+			      debug => $ENV{PERLWM_DEBUG});
+
+  PerlWM::Widget->init($self->{x});
+
+  # TODO: move all these into Client/Frame
 
   $self->{x}->event_add_hook
     ('PerlWM::Frame', 'Enter', 
@@ -49,6 +56,11 @@ sub perlwm {
   $self->{x}->event_add_hook('PerlWM::Frame', 'DestroyNotify', \&destroy_notify);
   $self->{x}->event_add_hook('PerlWM::Frame', 'MapNotify', \&map_notify);
   $self->{x}->event_add_hook('PerlWM::Frame', 'UnmapNotify', \&unmap_notify);
+
+  $self->{x}->event_add_hook('PerlWM::Client', 'Property(WM_NAME)', sub {
+			       my($client) = @_;
+			       $client->{frame}->{label}->{value} = $client->{prop}->{WM_NAME};
+			     });
 
   $self->{x}->event_add_global('MapRequest', 
 			       { sub => sub {
@@ -99,8 +111,6 @@ sub manage_window {
   my $client = PerlWM::Client->new(x => $self->{x}, id => $id, attr => \%attr);
 
   $self->{x}->ChangeSaveSet('Insert', $id);
-
-  $client->{frame} = PerlWM::Frame->new(x => $self->{x}, client => $client);
 
   return $client;
 }
