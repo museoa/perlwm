@@ -23,9 +23,12 @@ sub EVENT {
 ############################################################################
 
 sub new {
-  my($proto, @args) = @_;
+  my($proto, %arg) = @_;
   my $class = ref $proto || $proto || __PACKAGE__;
-  my $self = $class->SUPER::new(@args);
+  my $self = $class->SUPER::new(%arg);
+
+  $self->{padding} ||= 0;
+  $self->{value} ||= '';
 
   tie($self->{value}, 'PerlWM::Widget::Tie::Scalar', 
       $self->{value}, \&onValueChange, $self);
