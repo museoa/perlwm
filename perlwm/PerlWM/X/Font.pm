@@ -33,7 +33,7 @@ sub font_create {
 
 sub font_info {
   
-  my($self, $id);
+  my($self, $id) = @_;
   my %info = $self->QueryFont($id);
   return \%info;
 }
