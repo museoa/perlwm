@@ -10,6 +10,7 @@ use strict;
 use warnings;
 use base qw(PerlWM::X::Window);
 
+use PerlWM::Icon;
 use PerlWM::Frame;
 
 ############################################################################
@@ -95,6 +96,37 @@ sub configure {
   if (%arg) {
     $self->ConfigureWindow(%arg);
   }
+}
+
+############################################################################
+
+sub iconify {
+
+  my($self) = @_;
+  unless ($self->{icon}) {
+    $self->{icon} = PerlWM::Icon->new(x => $self->{x}, client => $self);
+  }
+  $self->{icon}->MapWindow();
+  if ($self->{frame}) {
+    $self->{frame}->UnmapWindow();
+  }
+  else {
+    $self->{frame}->UnmapWindow();
+  }
+}
+
+############################################################################
+
+sub deiconify {
+
+  my($self) = @_;
+  if ($self->{frame}) {
+    $self->{frame}->MapWindow();
+  }
+  else {
+    $self->{frame}->MapWindow();
+  }
+  $self->{icon}->UnmapWindow();
 }
 
 ############################################################################

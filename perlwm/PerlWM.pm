@@ -15,9 +15,9 @@ use strict;
 use Data::Dumper; $Data::Dumper::Indent = 1;
 
 use PerlWM::X;
+use PerlWM::Icon;
 use PerlWM::Frame;
 use PerlWM::Client;
-
 use PerlWM::Widget;
 
 ############################################################################
@@ -49,9 +49,15 @@ sub perlwm {
   $self->{x}->event_add_hook('PerlWM::Frame', 'Drag(Button1)', \&move_opaque);
   $self->{x}->event_add_hook('PerlWM::Frame', 'Drag(Mod1 Button1)', \&move_opaque);
   $self->{x}->event_add_hook('PerlWM::Client', 'Drag(Mod1 Button1)', \&move_opaque);
-  
-  $self->{x}->event_add_hook('PerlWM::Frame', 'Click(Button3)', \&lower_window);
-  $self->{x}->event_add_hook('PerlWM::Client', 'Click(Mod1 Button3)', \&lower_window);
+
+  $self->{x}->event_add_hook('PerlWM::Frame', 'Click(Button3)', \&iconify_window);
+  $self->{x}->event_add_hook('PerlWM::Frame', 'Click(Mod1 Button3)', \&iconify_window);
+  $self->{x}->event_add_hook('PerlWM::Client', 'Click(Mod1 Button3)', \&iconify_window);
+
+  $self->{x}->event_add_hook('PerlWM::Icon', 'Drag(Button1)', \&move_icon_opaque);
+  $self->{x}->event_add_hook('PerlWM::Icon', 'Drag(Mod1 Button1)', \&move_icon_opaque);
+  $self->{x}->event_add_hook('PerlWM::Icon', 'Click(Button1)', \&deiconify_window);
+  $self->{x}->event_add_hook('PerlWM::Icon', 'Click(Double Button1)', \&deiconify_window);
 
   $self->{x}->event_add_hook('PerlWM::Frame', 'Drag(Button2)', \&resize_opaque);
   $self->{x}->event_add_hook('PerlWM::Frame', 'Drag(Mod1 Button2)', \&resize_opaque);
@@ -222,7 +228,6 @@ sub lower_window {
 
   my($window, $event) = @_;
   my($frame, $client);
-  #------------------------------------------
   if ($window->isa('PerlWM::Frame')) {
     $frame = $window;
     $client = $frame->{client};
@@ -231,9 +236,49 @@ sub lower_window {
     $client = $window;
     $frame = $client->{frame};
   }
-  #------------------------------------------
   $frame->ConfigureWindow(stack_mode => 'Below');
   return 1;
+}
+
+############################################################################
+
+sub iconify_window {
+
+  my($window, $event) = @_;
+  my($frame, $client);
+  if ($window->isa('PerlWM::Frame')) {
+    $frame = $window;
+    $client = $frame->{client};
+  }
+  elsif ($window->isa('PerlWM::Client')) {
+    $client = $window;
+    $frame = $client->{frame};
+  }
+  $client->iconify();
+}
+
+############################################################################
+
+sub deiconify_window {
+
+  my($window, $event) = @_;
+  return unless my $client = $window->{client};
+  $client->deiconify();
+}
+
+############################################################################
+
+sub move_icon_opaque {
+
+  my($window, $event) = @_;
+  my $state = $event->{state};
+  if ($event->{drag} eq 'start') {
+    $state->{orig_position} = $window->position();
+  }
+  if ($event->{delta}->[0] && $event->{delta}->[1]) {
+    $window->ConfigureWindow(x => $state->{orig_position}->[0] + $event->{delta}->[0],
+			     y => $state->{orig_position}->[1] + $event->{delta}->[1]);
+  }
 }
 
 ############################################################################
@@ -261,8 +306,12 @@ sub unmap_notify {
 
   my($window, $event) = @_;
   return unless ref $window;
+  if ($window->isa('PerlWM::Frame')) {
+    return if $window->{client}->{iconified};
+  }
   $window->UnmapWindow();
 }
 
 ############################################################################
+
 1;
