@@ -115,8 +115,8 @@ sub error_handler {
   $type = $self->do_interp('Error', $type);
   my $request = ($self->do_interp('Request', $major_op) ||
 		 $self->{ext_request}{$major_op}[$minor_op][0]);
-  $info = X11::Protocol::hexi($info);
   if ($self->{debug}) {
+    $info = X11::Protocol::hexi($info);
     print STDERR "Error - $self->{debug}->{$seq} - $request($info) - $type\n";
   }
   else {
@@ -124,6 +124,8 @@ sub error_handler {
   }
   # unwedge anything waiting for reply
   ${$self->{replies}->{$seq}} = $data;
+  # die (sometimes)
+  die "$request" if $self->{die_on_error};
 }
 
 ############################################################################
