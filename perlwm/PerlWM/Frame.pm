@@ -174,7 +174,8 @@ sub configure {
 		  border_width => 0,
 		  above_sibling => $self->{id},
 		  override_redirect => 0 );
-    $self->{client}->SendEvent(0, 'StructureNotify', 
+    $self->{client}->SendEvent(0, 
+			       $self->{x}->pack_event_mask('StructureNotify'), 
 			       $self->{x}->pack_event(%event));
     $self->{client}->ConfigureWindow(width => $size->[0],
 				     height => $size->[1]) if $arg{size};
@@ -233,8 +234,21 @@ sub enter {
   return if $event->{detail} eq 'Inferior';
   return if $event->{mode} eq 'Grab';
   return if $self->{perlwm}->{focus} == $self;
-
-  $client->SetInputFocus('None', 'CurrentTime');
+  
+  if (grep /WM_TAKE_FOCUS/, @{$client->{prop}->{WM_PROTOCOLS}}) {
+    my %event = ( name => 'ClientMessage',
+		  window => $self->{client}->{id},
+		  type => $self->{x}->atom('WM_PROTOCOLS'),
+		  format => 32,
+		  data => pack('L5', 
+			       $self->{x}->atom('WM_TAKE_FOCUS'), 
+			       $event->{time}) );
+    $client->SendEvent(0, $self->{x}->pack_event_mask('ClientMessage'),
+		       $self->{x}->pack_event(%event));
+  }
+  else {
+    $client->SetInputFocus('PointerRoot', 'CurrentTime');
+  }
   $self->{perlwm}->{focus} = $self;
   $self->blend(1);
 
@@ -251,7 +265,7 @@ sub leave {
   return unless $event->{mode} eq 'Normal';
   return unless $self->{perlwm}->{focus} == $self;
 
-  $self->{perlwm}->SetInputFocus('None', 'CurrentTime');
+  $self->{perlwm}->SetInputFocus('PointerRoot', 'CurrentTime');
   $self->{perlwm}->{focus} = $self->{perlwm};
   $self->blend(-1);
   $self->timer_set(0, 'Raise');
