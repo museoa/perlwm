@@ -11,6 +11,8 @@ use warnings;
 
 use Storable qw(freeze);
 
+use PerlWM::Config;
+
 ############################################################################
 
 sub object_init {
@@ -66,10 +68,15 @@ sub object_get {
   else {
     # look up the spec
     $spec ||= $self->{name}->{$type}->{spec}->{$name} if $name;
+    if ((!$spec) && ($type ne 'gc')) {
+      # nothing there - try the config
+      $spec = PerlWM::Config->get($name);
+      # save it for next time
+      $self->object_add($type, $name, $spec);
+    }
     if (!$spec) {
-      # no spec found - look for 'default'
+      # still no spec found - look for a 'default' for this type
       $spec =  $self->{name}->{$type}->{spec}->{default};
-      # shouldn't happen, since we set defaults in the constructor
       die "no spec for $type/$name, no default either\n" unless $spec;
     }
     if (defined($id = $self->{spec}->{$type}->{id}->{$spec})) {
@@ -112,8 +119,14 @@ sub object_info {
   else {
     # look up the spec
     my $spec = $self->{name}->{$type}->{spec}->{$name};
+    if ((!$spec) && ($type ne 'gc')) {
+      # nothing there - try the config
+      $spec = PerlWM::Config->get($name);
+      # save it for next time
+      $self->object_add($type, $name, $spec);
+    }
     if (!$spec) {
-      # no spec found - look for 'default'
+      # still no spec found - look for a 'default' for this type
       $spec =  $self->{name}->{$type}->{spec}->{default};
       die "no spec for $type/$name, no default either\n" unless $spec;
     }
