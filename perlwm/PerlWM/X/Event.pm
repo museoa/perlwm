@@ -411,6 +411,8 @@ sub event_loop {
 		     state => $self->{mouse}->{drag_state},
 		     event => $self->{mouse}->{target},
 		     press => $self->{mouse}->{press},
+		     delta => [$event{root_x} - $self->{mouse}->{press}->{root_x},
+			       $event{root_y} - $self->{mouse}->{press}->{root_y}],
 		     xevent => {%event},
 		     arg => $self->{mouse}->{bits},
 		     drag => 'stop');
@@ -431,7 +433,7 @@ sub event_loop {
 	  $self->{mouse}->{target} = $event{event};
 	  $self->{mouse}->{click_count}++;
 	  $self->{mouse}->{drag} = 0;
-	  $self->{mouse}->{press} = \%event;
+	  $self->{mouse}->{press} = {%event};
 	  $self->event_timer($MULTI_CLICK_TIME, $self->{mouse});
 	}
 	elsif ($event{name} eq 'MotionNotify') {
@@ -443,6 +445,8 @@ sub event_loop {
 		     state => $self->{mouse}->{drag_state},
 		     event => $self->{mouse}->{target},
 		     press => $self->{mouse}->{press},
+		     delta => [$event{root_x} - $self->{mouse}->{press}->{root_x},
+			       $event{root_y} - $self->{mouse}->{press}->{root_y}],
 		     xevent => {%event},
 		     arg => $self->{mouse}->{bits},
 		     drag => 'start');
@@ -453,6 +457,8 @@ sub event_loop {
 		     state => $self->{mouse}->{drag_state},
 		     event => $self->{mouse}->{target},
 		     press => $self->{mouse}->{press},
+		     delta => [$event{root_x} - $self->{mouse}->{press}->{root_x},
+			       $event{root_y} - $self->{mouse}->{press}->{root_y}],
 		     xevent => {%event},
 		     arg => $self->{mouse}->{bits},
 		     drag => 'move');
