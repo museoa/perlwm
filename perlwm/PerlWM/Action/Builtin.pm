@@ -99,6 +99,7 @@ sub deiconify_window {
 
   my($window, $event) = @_;
   $window->{frame}->deiconify();
+  $window->{frame}->ConfigureWindow(stack_mode => 'Above');
 }
 
 ############################################################################
