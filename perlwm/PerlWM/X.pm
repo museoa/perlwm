@@ -150,7 +150,27 @@ sub dumper {
 
 ############################################################################
 
-# We tweak X11::Protocol here slightly - to use sysread, not read, so we 
+# We fix a problem with X11::Protocol here - it doesn't handle request
+# numbers wrapping around correctly. We only need to tweak a couple of
+# functions which are used to track the replies from requests.
+
+no warnings 'redefine';
+
+sub X11::Protocol::add_reply {
+  my $self = shift;
+  my($seq, $var) = @_;
+  $self->{'replies'}->{$seq & 0xffff} = $var;
+}
+
+sub X11::Protocol::delete_reply {
+  my $self = shift;
+  my($seq) = @_;
+  delete $self->{'replies'}->{$seq & 0xffff};
+}
+
+############################################################################
+
+# We tweak X11::Protocol again here - to use sysread, not read, so we 
 # can then use select. This shouldn't really hurt performance too badly, 
 # since X11::Protocol reads everything fairly efficiently. This is just a
 # copy of the function we need to change.
@@ -158,11 +178,7 @@ sub dumper {
 use X11::Protocol::Connection::Socket;
 use X11::Protocol::Connection::FileHandle;
 
-package X11::Protocol::Connection::Socket;
-
-no warnings;
-
-sub get {
+sub X11::Protocol::Connection::Socket::get {
   my($self) = shift;
   my($len) = @_;
   my($x, $n, $o) = ("", 0, 0);
@@ -175,11 +191,7 @@ sub get {
   return $x;
 }
 
-package X11::Protocol::Connection::FileHandle;
-
-no warnings;
-
-sub get {
+sub X11::Protocol::Connection::FileHandle::get {
   my($self) = shift;
   my($len) = @_;
   my($x, $n, $o) = ("", 0, 0);
