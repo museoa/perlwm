@@ -263,8 +263,10 @@ sub focus {
 sub enter {
 
   my($self, $event) = @_;
-  return if $event->{detail} eq 'Inferior';
-  return if $event->{mode} eq 'Grab';
+  if ($event) {
+    return if $event->{detail} eq 'Inferior';
+    return if $event->{mode} eq 'Grab';
+  }
   $self->focus();
   $self->blend(1);
   $self->timer_set(10000, 'Raise');
