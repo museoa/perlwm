@@ -331,6 +331,27 @@ sub deiconify {
 
 ############################################################################
 
+sub delete_or_destroy {
+
+  my($self) = @_;
+  return unless my $client = $self->{client};
+  
+  if (grep /WM_DELETE_WINDOW/, @{$client->{prop}->{WM_PROTOCOLS}}) {
+    my %event = ( name => 'ClientMessage',
+		  window => $self->{client}->{id},
+		  type => $self->{x}->atom('WM_PROTOCOLS'),
+		  format => 32,
+		  data => pack('L5', $self->{x}->atom('WM_DELETE_WINDOW')) );
+    $client->SendEvent(0, $self->{x}->pack_event_mask('ClientMessage'),
+		       $self->{x}->pack_event(%event));
+  }
+  else {
+    $client->DestroyWindow();
+  }
+}
+
+############################################################################
+
 sub check_size_hints {
 
   my($self, $size) = @_;
@@ -430,6 +451,8 @@ sub EVENT { ( __PACKAGE__->SUPER::EVENT,
 	      'Key(Mod4 Right)' => action('focus_next'),
 
 	      'Key(Mod4 s)' => action('keyboard_search'),
+
+	      'Key(Mod4 w)' => action('close_window'),
 
 	      # TODO: config for focus policy
 	      'Enter' => \&enter,
