@@ -61,7 +61,7 @@ sub new {
   $self->{border_width} = PerlWM::Config->get('frame/border_width');
 
   $geom{x} ||= $self->{border_width};
-  $geom{y} ||= ($self->{border_width} * 2) + 18;
+  $geom{y} ||= ($self->{border_width} * 3) + 18;
 
   $self->create(x => $geom{x} - $self->{border_width},
 		y => $geom{y} - (($self->{border_width} * 2) + 18),
@@ -178,7 +178,7 @@ sub configure {
     $self->geom(%frame);
     $self->{label}->ConfigureWindow(width => ($frame{width} - 
 					      ($self->{border_width} * 2)))
-      if $frame{width};
+      if defined($frame{width});
     $size ||= $self->size();
     my %event = ( name => 'ConfigureNotify',
 		  window => $self->{client}->{id},
@@ -193,7 +193,9 @@ sub configure {
     $self->{client}->SendEvent(0, 
 			       $self->{x}->pack_event_mask('StructureNotify'), 
 			       $self->{x}->pack_event(%event));
-    $self->{client}->ConfigureWindow(width => $size->[0],
+    $self->{client}->ConfigureWindow(x => $self->{border_width},
+				     y => (($self->{border_width} * 2) + 18),
+				     width => $size->[0],
 				     height => $size->[1]) if $arg{size};
   }
 }
@@ -204,14 +206,66 @@ sub configure_request {
 
   my($self, $event) = @_;
   my $xe = $event->{xevent};
-  $self->{x}->ConfigureWindow($xe->{window},
-			      map { exists $xe->{$_}?($_=>$xe->{$_}):()
-				  } qw(x y width height 
-				       border_width sibling stack_mode));
-  if (defined($xe->{width}) && defined($xe->{height})) {
-    $self->ConfigureWindow
-      (width => $xe->{width} + ($self->{border_width} * 2),
-       height => $xe->{height} + ($self->{border_width} * 3) + 18);
+  return unless $xe->{window} == $self->{client}->{id};
+  my(%client, %frame);
+  my $position = $self->geom()->{position};
+  foreach (qw(x y width height border_width sibling stack_mode)) {
+    next unless defined $xe->{$_};
+    $client{$_} = $xe->{$_};
+    if ($_ eq 'width') {
+      $frame{$_} = $xe->{$_} + ($self->{border_width} * 2);
+    }
+    elsif ($_ eq 'height') {
+      $frame{$_} = $xe->{$_} + ($self->{border_width} * 3) + 18;
+    }
+    elsif ($_ eq 'x') {
+      if ($xe->{$_} != $position->[0]) {
+	$client{$_} = $self->{border_width};
+	$frame{$_} = $xe->{$_} - $client{$_};
+      }
+      else {
+	delete $client{$_};
+      }
+    }
+    elsif ($_ eq 'y') {
+      if ($xe->{$_} != $position->[1]) {
+	$client{$_} = (($self->{border_width} * 2) + 18);
+	$frame{$_} = $xe->{$_} - $client{$_};
+      }
+      else {
+	delete $client{$_};
+      }
+    }
+    elsif ($_ eq 'stack_mode') {
+      $frame{$_} = delete $client{$_};
+    }
+  }
+  if (%frame) {
+    $self->ConfigureWindow(%frame);
+      $self->{label}->ConfigureWindow
+	(width => ($frame{width} - ($self->{border_width} * 2)))
+	  if defined($frame{width});
+    $self->geom(%frame);
+  }
+  if (%client) {
+    $self->{client}->ConfigureWindow(%client);
+    my %event = ( name => 'ConfigureNotify',
+		  window => $self->{client}->{id},
+		  event => $self->{client}->{id},
+		  border_width => 0,
+		  above_sibling => $self->{id},
+		  override_redirect => 0 );
+
+    $event{x} = $frame{x} + $client{x} if defined($frame{x});
+    $event{y} = $frame{y} + $client{y} if defined($frame{y});
+    $event{width} = $client{width} if defined($client{width});
+    $event{height} = $client{height} if defined($client{height});
+
+    $self->{client}->SendEvent
+      (0, 
+       $self->{x}->pack_event_mask('StructureNotify'), 
+       $self->{x}->pack_event(%event))
+	unless defined($frame{width});
   }
 }
 
@@ -238,7 +292,7 @@ sub focus {
 		       $self->{x}->pack_event(%event));
   }
   $self->{perlwm}->{focus} = $self;
-  $self->{perlwm}->{prop}->{PERLWM_FOCUS} = $self->{id};
+  $self->{perlwm}->{sloppy_focus} = $self;
 }
 
 ############################################################################
@@ -263,7 +317,7 @@ sub leave {
   my($self, $event) = @_;
   return unless my $client = $self->{client};
   if ($event) {
-    return if $event->{detail} eq 'Inferior';
+    return if $event->{detail} && ($event->{detail} eq 'Inferior');
     return unless $event->{mode} eq 'Normal';
   }
   return unless $self->{perlwm}->{focus} == $self;
@@ -293,6 +347,15 @@ sub destroy_notify {
   $self->{client} = undef;
   $self->destroy();
   $self->{perlwm}->{frames} = [ grep $_ != $self, @{$self->{perlwm}->{frames}} ];
+}
+
+############################################################################
+
+sub map_request {
+
+  my($self, $event) = @_;
+  $self->{client}->MapWindow();
+  $self->MapWindow();
 }
 
 ############################################################################
@@ -368,6 +431,9 @@ sub check_size_hints {
       if (my $min = $hints->{PMinSize}) {
 	$size->[$_] = $min->[$_] if $size->[$_] < $min->[$_];
       }
+      if (my $max = $hints->{PMaxSize}) {
+	$size->[$_] = $max->[$_] if $size->[$_] > $max->[$_];
+      }
       if (my $inc = $hints->{PResizeInc}) {
 	my $base = $hints->{PBaseSize};
 	$size->[$_] -= $base->[$_] if $base;
@@ -441,6 +507,15 @@ sub wm_protocol_check {
 
 ############################################################################
 
+sub warp_display {
+  
+  my($display) = @_;
+  my $x = X11::Protocol->new(":0.$display");
+  $x->WarpPointer('None', $x->{root}, 0, 0, 0, 0, 0, 0);
+}
+
+############################################################################
+
 action_register('keyboard_move', 'PerlWM::Action::Move');
 action_register('keyboard_resize', 'PerlWM::Action::Resize');
 action_register('keyboard_search', 'PerlWM::Action::Search');
@@ -475,6 +550,11 @@ sub EVENT { ( __PACKAGE__->SUPER::EVENT,
 
 	      'Key(Mod4 w)' => action('close_window'),
 
+	      # TODO: put this somewhere else
+	      'Key(Mod4 Delete)' => sub { warp_display(0); },
+	      'Key(Mod4 End)' => sub { warp_display(1); },
+	      'Key(Mod4 PageDown)' => sub { warp_display(2); },
+
 	      # TODO: config for focus policy
 	      'Enter' => \&enter,
 	      'Leave' => \&leave,
@@ -483,6 +563,7 @@ sub EVENT { ( __PACKAGE__->SUPER::EVENT,
 	      'ConfigureRequest' => \&configure_request,
 	      'DestroyNotify' => \&destroy_notify,
 	      'MapNotify' => \&map_notify,
+	      'MapRequest' => \&map_request,
 	      'UnmapNotify' => \&unmap_notify ) }
 
 sub OVERLAY { ( 'Property(WM_NAME)' => \&prop_wm_name ) }
