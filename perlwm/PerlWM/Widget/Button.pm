@@ -1,6 +1,6 @@
 #
 # $Id$
-# 
+#
 
 package PerlWM::Widget::Button;
 
@@ -13,7 +13,7 @@ use base qw(PerlWM::Widget::Label);
 
 ############################################################################
 
-sub onClick { 
+sub onClick {
 
   my($self, $event) = @_;
   if ($self->{action}) {
