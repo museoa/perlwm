@@ -120,7 +120,6 @@ sub size {
 
   my($self) = @_;
   my $size = $self->geom()->{size};
-  print "size / @{$size}\n";
   $size->[0] -= 4;
   $size->[1] -= 4 + 20;
   return $size;
