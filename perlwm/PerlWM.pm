@@ -53,9 +53,9 @@ sub perlwm {
   $self->{x}->event_add_hook('PerlWM::Frame', 'Click(Button3)', \&lower_window);
   $self->{x}->event_add_hook('PerlWM::Client', 'Click(Mod1 Button3)', \&lower_window);
 
-  $self->{x}->event_add_hook('PerlWM::Frame', 'Drag(Button2)', \&size_drag);
-  $self->{x}->event_add_hook('PerlWM::Frame', 'Drag(Mod1 Button2)', \&size_drag);
-  $self->{x}->event_add_hook('PerlWM::Client', 'Drag(Mod1 Button2)', \&size_drag);
+  $self->{x}->event_add_hook('PerlWM::Frame', 'Drag(Button2)', \&resize_opaque);
+  $self->{x}->event_add_hook('PerlWM::Frame', 'Drag(Mod1 Button2)', \&resize_opaque);
+  $self->{x}->event_add_hook('PerlWM::Client', 'Drag(Mod1 Button2)', \&resize_opaque);
 
   $self->{x}->event_add_hook('PerlWM::Frame', 'DestroyNotify', \&destroy_notify);
   $self->{x}->event_add_hook('PerlWM::Frame', 'MapNotify', \&map_notify);
@@ -166,21 +166,19 @@ sub move_opaque {
   }
   my $state = $event->{state};
   if ($event->{drag} eq 'start') {
-    my %geom = $frame->GetGeometry($frame);
-    $state->{orig_geom} = \%geom;
-    $state->{offset_x} = $geom{x} - $event->{root_x};
-    $state->{offset_y} = $geom{y} - $event->{root_y};
+    $state->{orig_position} = $client->position();
   }
-  $frame->ConfigureWindow(x => $state->{offset_x} + $event->{root_x}, 
-			  y => $state->{offset_y} + $event->{root_y});
+  if ($event->{delta}->[0] && $event->{delta}->[1]) {
+    $client->configure(position => [$state->{orig_position}->[0] + $event->{delta}->[0],
+				    $state->{orig_position}->[1] + $event->{delta}->[1]])
+  }
   return 1;
 }
 
 ############################################################################
 
-sub size_drag {
+sub resize_opaque {
 
-  #-------------------------------------------------------------
   my($window, $event) = @_;
   my($frame, $client);
   if ($window->isa('PerlWM::Frame')) {
@@ -192,33 +190,30 @@ sub size_drag {
     $frame = $client->{frame};
   }
   my $state = $event->{state};
-  #-------------------------------------------------------------
   if ($event->{drag} eq 'start') {
-    my %geom = $frame->GetGeometry($frame);
-    $state->{frame_orig_geom} = \%geom;
-    my %geom = $client->GetGeometry($client);
-    $state->{client_orig_geom} = \%geom;
-    $state->{start_x} =  - $event->{root_x};
-    $state->{start_y} =  - $event->{root_y};
+    $state->{orig_position} = $client->position();
+    $state->{orig_size} = $client->size();
+    my $click = [$event->{press}->{root_x}, $event->{press}->{root_y}];
+    my $middle = [$state->{orig_position}->[0] + ($state->{orig_size}->[0] / 2),
+		  $state->{orig_position}->[1] + ($state->{orig_size}->[1] / 2)];
+    $state->{direction} = [$click->[0] < $middle->[0] ? -1 : 1,
+			   $click->[1] < $middle->[1] ? -1 : 1];
   }
-  #-------------------------------------------------------------
-  if ( ( ( $state->{start_x} + $event->{root_x} ) != 0 )  ||
-       ( ( $state->{start_y} + $event->{root_y} ) != 0 ) ) {
-    #------------------------------------------
-    my $inc_x=$event->{root_x} +  $state->{start_x} ;
-    my $inc_y=$event->{root_y} +  $state->{start_y} ;
-    #------------------------
-    $frame->ConfigureWindow(
-			    width => $state->{frame_orig_geom}->{width}  + $inc_x ,
-			    height => $state->{frame_orig_geom}->{height}  + $inc_y ) ;
-    #------------------------
-    $client->ConfigureWindow(
-			     width => $state->{client_orig_geom}->{width}  + $inc_x ,
-			     height => $state->{client_orig_geom}->{height}  + $inc_y ) ;
-    #------------------------------------------
+  if ($event->{delta}->[0] && $event->{delta}->[1]) {
+    my $position = [@{$state->{orig_position}}];
+    my $size = [@{$state->{orig_size}}];
+    foreach (0,1) {
+      if ($state->{direction}->[$_] < 0) {
+	$position->[$_] += $event->{delta}->[$_];
+	$size->[$_] -= $event->{delta}->[$_];
+      }
+      else {
+	$size->[$_] += $event->{delta}->[$_];
+      }
+    }    
+    $client->configure(position => $position, size => $size);
   }
   return 1;
-  #-------------------------------------------------------------
 }
 
 ############################################################################

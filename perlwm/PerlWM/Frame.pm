@@ -52,4 +52,38 @@ sub new {
 
 ############################################################################
 
+sub configure {
+
+  my($self, %client) = @_;
+
+  my %arg;
+
+  if (my $size = $client{size}) {
+    $arg{size} = [$size->[0] + 4, $size->[1] + 4 + 20];
+  }
+  if (my $position = $client{position}) {
+    $arg{position} = [$position->[0] - 2, $position->[1] - 20];
+  }
+
+  if (my $size = delete $arg{size}) {
+    $arg{width} = $size->[0];
+    $arg{height} = $size->[1];
+  }
+  if (my $position = delete $arg{position}) {
+    $arg{x} = $position->[0];
+    $arg{y} = $position->[1];
+  }
+  
+  $arg{stack_mode} = $client{stack_mode} if $client{stack_mode};
+
+  if (%arg) {
+    $self->ConfigureWindow(%arg);
+    if ($arg{width}) {
+      $self->{label}->ConfigureWindow(width => $arg{width} - 4);
+    }
+  }
+}
+
+############################################################################
+
 1;
