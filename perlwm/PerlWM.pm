@@ -26,8 +26,7 @@ sub new {
   my $x = PerlWM::X->new(display => $ENV{DISPLAY},
 			 debug => $ENV{PERLWM_DEBUG});
   my $self = $class->SUPER::new(x => $x, id => $x->{root});
-
-  PerlWM::Widget->init($x);
+  $self->{config} = PerlWM::Config->load();
 
   my(@clients);
   eval {
@@ -37,6 +36,7 @@ sub new {
     my $ssr = $self->{x}->pack_event_mask('SubstructureRedirect');
     $self->ChangeWindowAttributes(id => $self->{id}, 
 				  event_mask => $self->event_mask($ssr));
+    (undef, undef, @clients) = $self->{x}->QueryTree($self->{x}->{root});
   };
   if ($@) {
     warn $@;
@@ -45,7 +45,6 @@ sub new {
   $self->{focus} = $self;
   $self->{frames} = [];
   $self->{perlwm} = $self;
-  (undef, undef, @clients) = $self->{x}->QueryTree($self->{x}->{root});
   $self->manage_window($_) for @clients;
   $self->{x}->event_loop();
   # won't actually get here
