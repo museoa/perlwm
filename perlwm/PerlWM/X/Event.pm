@@ -91,15 +91,19 @@ sub event_button_unpack {
 
 sub event_timer {
 
-  my($self, $timeout, $data) = @_;
+  my($self, $timeout, $target, $arg) = @_;
+
+  $arg ||= '';
+  my $key = "$target.$arg";
   
   # delete timer
-  @{$self->{timer}} = grep { $_->[1] ne $data } @{$self->{timer}};
+  @{$self->{timer}} = grep { $_->[1] ne $key } @{$self->{timer}};
 
   if ($timeout) {
     # add timer
     @{$self->{timer}} = sort { $a->[0] <=> $b->[0] 
-			     } @{$self->{timer}}, [$timeout, $data];
+			     } @{$self->{timer}}, [$timeout, $key, 
+						   $target, $arg];
   }
 }
 
@@ -109,8 +113,7 @@ sub event_handler_parse {
 
   my($self, $hash, $event, $handler) = @_;
 
-  $handler = { sub => $handler } if ref $handler eq 'CODE';
-  $handler->{arg} ||= [];
+  die unless ref $handler eq 'CODE';
 
   # look for event arguments
   my $arg;
@@ -239,9 +242,10 @@ sub event_loop {
   my $stime = $hires ? &{$hires}() : time();
 
   $self->{event_loop_started} = 1;
-  #$self->event_hook_all();
 
   my($bits, $time, $adjust, %event) = ('');
+  # we can use select because we override X11::Protocol::Connection::* 
+  # to use sysread - see the end of PerlWM::X for more details
   vec($bits, fileno($self->{connection}->fh()), 1) = 1;
  event:
   while (1) {
@@ -250,34 +254,37 @@ sub event_loop {
 	# timer has already expired
 	shift @{$self->{timer}};
 	# fake an event
-	%event = ( name => 'Timer', arg => $timer->[1], event => 1 );
+	%event = ( name => 'Timer', event => $timer->[2], arg => $timer->[3] );
 	# no adjustment
 	$adjust = 0;
       }
       else {
-	# wait for something to happen
-	$time = &{$hires}() if $hires;
-	my $x = select(my $ignore = $bits, undef, undef, $timer->[0] / 1000);
-	$adjust = &{$hires}() - $time if $hires;
-	if ($x) {
-	  # something arrived before timeout
-	  $self->handle_input();
-	  # is there an event ready now?
-	  if (%event = $self->dequeue_event()) {
-	    # use server time if we don't have time::hires
-	    $adjust = $event{time} - $time if ((!$hires) && ($event{time}));
+	# there might be something in the queue already
+	unless (%event = $self->dequeue_event()) {
+	  # nope, lets wait for something (or the timer)
+	  $time = &{$hires}() if $hires;
+	  my $x = select(my $ignore = $bits, undef, undef, $timer->[0] / 1000);
+	  $adjust = &{$hires}() - $time if $hires;
+	  if ($x) {
+	    # something arrived before timeout
+	    $self->handle_input();
+	    # is there an event ready now?
+	    if (%event = $self->dequeue_event()) {
+	      # use server time if we don't have time::hires
+	      $adjust = $event{time} - $time if ((!$hires) && ($event{time}));
+	    }
+	  } 
+	  else {
+	    # timeout - drop the timer
+	    shift @{$self->{timer}};
+	    # fake an event
+	    %event = ( name => 'Timer', event => $timer->[2], arg => $timer->[3] );
+	    # adjust by timer value if we don't have have time::hires
+	    $adjust = $timer->[0];
 	  }
-	} 
-	else {
-	  # timeout - drop the timer
-	  shift @{$self->{timer}};
-	  # fake an event
-	  %event = ( name => 'Timer', arg => $timer->[1], event => 1 );
-	  # adjust by timer value if we don't have have time::hires
-	  $adjust = $timer->[0];
+	  # adjust other timers 
+	  $_->[0] -= $adjust for @{$self->{timer}};
 	}
-	# adjust other timers 
-	$_->[0] -= $adjust for @{$self->{timer}};
       }
     }
     else {
@@ -290,7 +297,7 @@ sub event_loop {
       $time = $event{time} if $event{time} && !$hires;
       # deal with mouse events
       if (($event{name} =~ $X_MOUSE_EVENT) || 
-	  (($event{name} eq 'Timer') && ($event{arg} eq $self->{mouse}))) {
+	  (($event{name} eq 'Timer') && ($event{event} eq $self->{mouse}))) {
 	my %fire;
 #	printf("%8.4f $event{name} $event{arg}\n", 
 #	       ($hires ? &{$hires}() : time()) - $stime);
@@ -386,9 +393,8 @@ sub event_loop {
 	next unless $target = $self->{event}->{ref $window}->{$name};
 	next unless (!defined($arg)) || ($target = $target->{$arg});
 	@event{qw(window x)} = ($window, $self);
-	next event if &{$target->{sub}}($window, 
-					\%event,
-					@{$target->{arg}});
+	$target->($window, \%event);
+	next event;
       }
     }
   }
