@@ -43,12 +43,17 @@ sub perlwm {
        return unless $frame->{client};
        return if $event->{detail} eq 'Inferior';
        $frame->{client}->SetInputFocus('None', 'CurrentTime');
-       $frame->ConfigureWindow(stack_mode => 'Above');
+       # TODO: raise after delay?
+       # $frame->ConfigureWindow(stack_mode => 'Above');
      });
 
   $self->{x}->event_add_hook('PerlWM::Frame', 'Drag(Button1)', \&move_opaque);
   $self->{x}->event_add_hook('PerlWM::Frame', 'Drag(Mod1 Button1)', \&move_opaque);
   $self->{x}->event_add_hook('PerlWM::Client', 'Drag(Mod1 Button1)', \&move_opaque);
+
+  $self->{x}->event_add_hook('PerlWM::Frame', 'Click(Button1)', \&raise_window);
+  $self->{x}->event_add_hook('PerlWM::Frame', 'Click(Mod1 Button1)', \&raise_window);
+  $self->{x}->event_add_hook('PerlWM::Client', 'Click(Mod1 Button1)', \&raise_window);
 
   $self->{x}->event_add_hook('PerlWM::Frame', 'Click(Button3)', \&iconify_window);
   $self->{x}->event_add_hook('PerlWM::Frame', 'Click(Mod1 Button3)', \&iconify_window);
@@ -86,6 +91,9 @@ sub perlwm {
 
   $self->{x}->event_add_hook('PerlWM::Client', 'Property(WM_NAME)', sub {
 			       my($client) = @_;
+			       if ($client->{icon}) {
+				 $client->{icon}->{label}->{value} = $client->{prop}->{WM_NAME};
+			       }
 			       $client->{frame}->{label}->{value} = $client->{prop}->{WM_NAME};
 			     });
 
@@ -172,6 +180,9 @@ sub move_opaque {
   }
   my $state = $event->{state};
   if ($event->{drag} eq 'start') {
+    if ($frame) {
+      $frame->ConfigureWindow(stack_mode => 'Above');
+    }
     $state->{orig_position} = $client->position();
   }
   if ($event->{delta}->[0] && $event->{delta}->[1]) {
@@ -197,6 +208,9 @@ sub resize_opaque {
   }
   my $state = $event->{state};
   if ($event->{drag} eq 'start') {
+    if ($frame) {
+      $frame->ConfigureWindow(stack_mode => 'Above');
+    }
     $state->{orig_position} = $client->position();
     $state->{orig_size} = $client->size();
     my $click = [$event->{press}->{root_x}, $event->{press}->{root_y}];
@@ -242,6 +256,25 @@ sub lower_window {
 
 ############################################################################
 
+sub raise_window {
+
+  my($window, $event) = @_;
+  my($frame, $client);
+  if ($window->isa('PerlWM::Frame')) {
+    $frame = $window;
+    $client = $frame->{client};
+  }
+  elsif ($window->isa('PerlWM::Client')) {
+    $client = $window;
+    $frame = $client->{frame};
+  }
+  $frame->ConfigureWindow(stack_mode => 'Above');
+  return 1;
+}
+
+
+############################################################################
+
 sub iconify_window {
 
   my($window, $event) = @_;
@@ -274,6 +307,7 @@ sub move_icon_opaque {
   my $state = $event->{state};
   if ($event->{drag} eq 'start') {
     $state->{orig_position} = $window->position();
+    $window->ConfigureWindow(stack_mode => 'Above');
   }
   if ($event->{delta}->[0] && $event->{delta}->[1]) {
     $window->ConfigureWindow(x => $state->{orig_position}->[0] + $event->{delta}->[0],
