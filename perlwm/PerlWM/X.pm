@@ -15,7 +15,8 @@ use base qw(X11::Protocol
 	    PerlWM::X::Image
 	    PerlWM::X::Font
 	    PerlWM::X::Key
-	    PerlWM::X::GC);
+	    PerlWM::X::GC
+	    PerlWM::X::Render);
 
 use PerlWM::X::Window;
 
@@ -34,7 +35,7 @@ sub new {
     eval q{
       sub assemble_request {
 	my($self, @args) = @_;
-	my $cd = ((caller(2))[3] =~ /AUTOLOAD/) ? 2 : 1;
+	my $cd = ((caller(2))[3]||'' =~ /AUTOLOAD/) ? 2 : 1;
 	$self->{debug}->{$self->{sequence_num}} = join ':',(caller($cd))[1,2];
 	$self->SUPER::assemble_request(@args);
       }
@@ -202,6 +203,28 @@ sub X11::Protocol::Connection::FileHandle::get {
     $o += $n;
   }
   return $x;
+}
+
+############################################################################
+
+# Another X11::Protocol tweak here - it tries to require extension 
+# modules without checking to see if they are already loaded, so 
+# our Render extension isn't found (it's in PerlWM::X::Render)
+
+sub X11::Protocol::init_extension {
+  my($self, $name) = @_;
+  my($major, $event, $error) = $self->req('QueryExtension', $name)
+    or return 0;
+  $name =~ tr/-/_/;
+  my($pkg) = "X11::Protocol::Ext::$name";
+  eval {
+    eval "require $pkg;";
+    $self->{ext}->{$name} = [$major, $event, $error,
+			     $pkg->new($self, $major, $event, $error)];
+  };
+  warn "init_extension($name) - $@" if $@;
+  return 0 if $@;
+  return 1;
 }
 
 ############################################################################
