@@ -10,35 +10,25 @@ use strict;
 use warnings;
 use base qw(PerlWM::Action);
 
+use PerlWM::Config;
+
 ############################################################################
 
-sub setup {
+BEGIN {
+  my $popup = PerlWM::Config->new('default/search/popup');
+  $popup->set('border' => '#00ff00',
+	      'background' => '#000000',
+	      'input' => '#eeeeee',
+	      'match' => '#8080ff',
+	      'select' => '#00ff00',
+	      'font' => '-b&h-lucida-medium-r-normal-*-*-100-*-*-p-*-iso8859-1');
 
-  my($self) = @_;
-  return unless my $x = $self->{x};
-
-  $x->color_add('search_popup_border', '#00ff00');
-  $x->color_add('search_popup_background', 'black');
-  $x->color_add('search_popup_input', '#eeeeee');
-  $x->color_add('search_popup_match', '#8080ff');
-  $x->color_add('search_popup_select', '#00ff00');
-  $x->font_add('search_popup_font', 
-	       '-b&h-lucida-medium-r-normal-*-*-100-*-*-p-*-iso8859-1');
-
-  $x->color_add('search_frame_match', '#8080ff');
-  $x->color_add('search_frame_select', '#00ff00');
-  $x->color_add('search_frame_nomatch', '#ffffff');
-  $x->color_add('search_frame_focus', '#ff0000');
-
-  foreach (qw(input match select)) {
-    $x->gc_add("search_popup_$_", 
-	       { font => 'search_popup_font',
-		 foreground => "search_popup_${_}",
-		 background => 'black' } );
-  }
-  
-  *onetime = sub { };
-}
+  my $frame = PerlWM::Config->new('default/search/frame');
+  $frame->set(match => '#8080ff',
+	      select => '#00ff00',
+	      nomatch => '#ffffff',
+	      focus => '#ff0000');
+};
 
 ############################################################################
 
@@ -48,8 +38,7 @@ sub start {
   my $self = __PACKAGE__->SUPER::new(target => $target,
 				     event => $event,
 				     grab => 'keyboard');
-  $self->setup();
-  
+
   $self->{text} = '';
   $self->{select} = 0;
   $self->{case_insensitive} = 1;
@@ -68,9 +57,9 @@ sub start {
 sub highlight_frame {
 
   my($self, $frame, $type, $itype) = @_;
-  return unless my $color = $self->{x}->color_get("search_frame_$type");
+  return unless my $color = $self->{x}->color_get("search/frame/$type");
   $itype ||= $type;
-  return unless my $icolor = $self->{x}->color_get("search_frame_$itype");
+  return unless my $icolor = $self->{x}->color_get("search/frame/$itype");
   $frame->ChangeWindowAttributes(background_pixel => $color);
   $frame->ClearArea();
   if ($frame->{icon}) {
@@ -224,14 +213,14 @@ sub new {
 		width => 100, 
 		height => 1,
 		border_width => 2,
-		background_pixel => $x->color_get('search_popup_background'),
-		border_pixel => $x->color_get('search_popup_border'));
+		background_pixel => $x->color_get('search/popup/background'),
+		border_pixel => $x->color_get('search/popup/border'));
 
-  my $font_info = $x->font_info('search_popup_font');
+  my $font_info = $x->font_info('search/popup/font');
 
   $self->{ascent} = $font_info->{font_ascent};
   $self->{descent} = $font_info->{font_descent};
-  $self->{font} = $x->font_get('widget_font');
+  $self->{font} = $x->font_get('search/popup/font');
 
   $self->{padding} = 2;
   $self->{row_height} = (($self->{ascent} + $self->{descent}) + 
@@ -269,16 +258,26 @@ sub draw {
 
   return unless my $search = $self->{search};
 
+  unless ($self->{gc}) {
+    foreach (qw(input match select)) {
+      $self->{gc}->{$_} = 
+	$self->{x}->gc_get("search/popup/$_", 
+			   { font => 'search/popup/font',
+			     foreground => "search/popup/${_}",
+			     background => 'search/popup/background' } );
+    }
+  }
+
   my $y = $self->{padding} + $self->{ascent};
   if ($search->{text}) {
-    $self->PolyText8($self->{x}->gc_get('search_popup_input'),
+    $self->PolyText8($self->{gc}->{input},
 		     $self->{padding}, $y,
 		     [0, $search->{text}]);
   }
   for (my $index = 0; $index <= $#{$search->{match}}; $index++) { 
     $y += $self->{row_height};
     my $type = ($index == $search->{select} ? 'select' : 'match');
-    $self->PolyText8($self->{x}->gc_get('search_popup_'.$type),
+    $self->PolyText8($self->{gc}->{$type},
 		     $self->{padding}, $y,
 		     [0, $search->{match}->[$index]->{name}]);
   }
