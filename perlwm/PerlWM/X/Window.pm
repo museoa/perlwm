@@ -9,6 +9,8 @@ package PerlWM::X::Window;
 use strict;
 use warnings;
 
+use PerlWM::X::Property;
+
 ############################################################################
 
 sub new {
@@ -21,9 +23,20 @@ sub new {
   die "no x" unless $self->{x};
   die "invalid x" unless $self->{x}->isa('PerlWM::X');
 
-  $self->{x}->window_attach($self) if $self->{id};
+  $self->attach() if $self->{id};
 
   return $self;
+}
+
+############################################################################
+
+sub attach {
+  my($self) = @_;
+  $self->{x}->window_attach($self);
+  unless ($self->{no_props}) {
+    tie my %prop, 'PerlWM::X::Property', $self;
+    $self->{prop} = \%prop;
+  }
 }
 
 ############################################################################
@@ -43,74 +56,21 @@ sub create {
 	      delete $args{height} || 100,
 	      delete $args{border_width} || 0);
 
+  $args[0] = $args[0]->{id} if ref $args[0];
+
+  $args{bit_gravity} ||= 'Static'; 
+
   $self->{id} = $self->{x}->new_rsrc();
   $self->CreateWindow(@args, %args);
-  $self->{x}->window_attach($self);
+  $self->attach();
 }
 
 ############################################################################
 
 sub event_add {
 
-  my($self, $event, $arg, $handler) = @_;
-  $self->{x}->event_add_window($self, $event, $arg, $handler);
-}
-
-############################################################################
-
-sub get_unpack_property {
-
-  my($self, $name) = @_;
-  my($value, $type, $format, $bytes_after) = 
-    $self->GetProperty($name, 'AnyPropertyType', 0, -1, 0);
-
-  if ($self->{x}->atom_name($type) eq 'STRING') {
-    return [split(/\x00/, $value)];
-  }
-  elsif ($self->{x}->atom_name($type) eq 'WINDOW') {
-    return unpack('L', $value);
-  }
-  elsif ($self->{x}->atom_name($type) eq 'ATOM') {
-    return [map $self->{x}->atom_name($_), unpack('L*', $value)];
-  }
-  elsif ($self->{x}->atom_name($type) eq 'WM_STATE') {
-    return [unpack('L*', $value)];
-  }
-  elsif ($self->{x}->atom_name($type) eq 'WM_HINTS') {
-    my($flags, @fields) = unpack('L*', $value);
-    my(@names) = qw(input state 
-		    icon_pixmap icon_window icon_x icon_y icon_mask
-		    group);
-    my($result) = {'_type' => 'WM_HINTS'};
-    foreach my $n (@names) {
-      if ($flags & 1) {
-	$result->{$n} = shift @fields;
-      }
-      $flags >>= 1;
-    }
-    return $result;
-  }
-  elsif ($self->{x}->atom_name($type) eq 'WM_SIZE_HINTS') {
-    my($flags, @fields) = unpack('L*', $value);
-    my(@names) = qw(x y width height 
-		    min_width min_height max_width min_width
-		    width_inc height_inc 
-		    min_spect_x min_spect_y
-		    max_spect_x max_spect_y
-		    base_width base_height
-		    win_gravity);
-    my($result) = {'_type' => 'WM_SIZE_HINTS'};
-    foreach my $n (@names) {
-      if ($flags & 1) {
-	$result->{$n} = shift @fields;
-      }
-      $flags >>= 1;
-    }
-    return $result;
-  }
-  else {
-    return sprintf("%s (%d bytes)\n", $self->{x}->atom_name($type), length($value));
-  }
+  my($self, $event, $handler) = @_;
+  $self->{x}->event_add_window($self, $event, $handler);
 }
 
 ############################################################################
