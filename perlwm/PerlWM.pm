@@ -35,7 +35,7 @@ sub new {
       die "Window Manager already running\n";
     };
     my $ssr = $self->{x}->pack_event_mask('SubstructureRedirect');
-    $self->ChangeWindowAttributes(id => $self->{id},
+    $self->ChangeWindowAttributes(id => $self->{id}, 
 				  event_mask => $self->event_mask($ssr));
   };
   if ($@) {
@@ -44,6 +44,7 @@ sub new {
   }
   $self->{focus} = $self;
   $self->{frames} = [];
+  $self->{perlwm} = $self;
   (undef, undef, @clients) = $self->{x}->QueryTree($self->{x}->{root});
   $self->manage_window($_) for @clients;
   $self->{x}->event_loop();
@@ -92,7 +93,9 @@ sub configure_request {
 ############################################################################
 
 sub EVENT { ( MapRequest => \&map_request,
-	      ConfigureRequest => \&configure_request ) }
+	      ConfigureRequest => \&configure_request,
+
+	      'Key(Mod4 s)' => action('keyboard_search') ) }
 
 ############################################################################
 
