@@ -35,6 +35,9 @@ sub action_register {
 			    $class->can('$method'); }) {
       return $ACTION{$action} = $code;
     }
+    elsif ($@ && $@ !~ /Can\'t locate/) {
+      warn "action_register: '$spec' - $@\n";
+    }
   }
   warn "action_register: failed to find code for '$spec'\n" 
     unless $action eq $spec;
