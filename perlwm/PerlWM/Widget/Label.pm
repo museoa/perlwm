@@ -23,14 +23,22 @@ sub new {
 
   $self->{padding} ||= 0;
   $self->{value} ||= '';
+  $self->{class} = $arg{class} ? "widget/$arg{class}" : "widget";
+
+  $self->{foreground_spec} = $arg{foreground} || $self->{class}.'/foreground';
+  $self->{background_spec} = $arg{background} || $self->{class}.'/background';
+  $self->{font_spec} = $arg{font} || $self->{class}.'/font';
 
   tie($self->{value}, 'PerlWM::Widget::Tie::Scalar', 
       $self->{value}, \&onValueChange, $self);
 
-  $self->{gc} = $self->{x}->gc_get('widget');
-  $self->{ascent} = $self->{x}->font_info('widget_font')->{font_ascent};
-  $self->{descent} = $self->{x}->font_info('widget_font')->{font_descent};
-  $self->{font} = $self->{x}->font_get('widget_font');
+  $self->{gc} = $self->{x}->gc_get($self->{class}, 
+				   { foreground => $self->{foreground_spec},
+				     background => $self->{background_spec},
+				     font => $self->{font_spec} });
+  $self->{ascent} = $self->{x}->font_info($self->{font_spec})->{font_ascent};
+  $self->{descent} = $self->{x}->font_info($self->{font_spec})->{font_descent};
+  $self->{font} = $self->{x}->font_get($self->{font_spec});
 
   return $self;
 }
@@ -74,14 +82,14 @@ sub create {
 
   my($self, %args) = @_;
   if ($args{width} eq 'auto') {
-    $args{width} = $self->{x}->font_text_width('widget_font', $self->{value});
+    $args{width} = $self->{x}->font_text_width($self->{font_spec}, $self->{value});
     $args{width} += (2 * $self->{padding}) if $self->{padding};
   }
   if ($args{height} eq 'auto') {
     $args{height} = $self->{ascent} + $self->{descent};
     $args{height} += (2 * $self->{padding}) if $self->{padding};
   }
-  $args{background_pixel} ||= $self->{x}->color_get('widget_background');
+  $args{background_pixel} ||= $self->{x}->color_get($self->{background_spec});
   return $self->SUPER::create(%args);
 }
 
@@ -90,7 +98,7 @@ sub create {
 sub resize {
 
   my($self) = @_;
-  my $width = $self->{x}->font_text_width('widget_font', $self->{value});
+  my $width = $self->{x}->font_text_width($self->{font_spec}, $self->{value});
   $self->ConfigureWindow(width => $width + ($self->{padding} * 2));
 }
 
