@@ -57,6 +57,12 @@ sub perlwm {
   $self->{x}->event_add_hook('PerlWM::Frame', 'MapNotify', \&map_notify);
   $self->{x}->event_add_hook('PerlWM::Frame', 'UnmapNotify', \&unmap_notify);
 
+  $self->{x}->event_add_hook('PerlWM::Client', 'ConfigureRequest', sub {
+			       my($client, $event) = @_;
+			       print "client configure request\n";
+			       $client->{x}->dumper($event);
+			     });
+
   $self->{x}->event_add_hook('PerlWM::Client', 'Property(WM_NAME)', sub {
 			       my($client) = @_;
 			       $client->{frame}->{label}->{value} = $client->{prop}->{WM_NAME};
@@ -68,6 +74,19 @@ sub perlwm {
 				   $self->manage_window($window, 1);
 				 },
 				 arg => [ $self ] });
+
+  # TODO: class for root window
+  $self->{root} = PerlWM::X::Window->new(x => $self->{x}, id => $self->{x}->{root});
+  # let through any configure requests for new windows (before they are mapped)
+  $self->{root}->event_add('ConfigureRequest',
+			   sub {
+			     my($root, $event) = @_;
+			     my $xe = $event->{xevent};
+			     $self->{x}->ConfigureWindow($xe->{window},
+							 map { exists $xe->{$_}?($_=>$xe->{$_}):() 
+							     } qw(x y width height 
+								  border_width sibling stack_mode));
+			   });
 
   $self->init_wm();
 
@@ -106,9 +125,10 @@ sub manage_window {
   return if $attr{override_redirect};
   return if ((!$map_request) && ($attr{map_state} ne 'Viewable'));
 
-  $self->{x}->MapWindow($id) if $map_request;
-
-  my $client = PerlWM::Client->new(x => $self->{x}, id => $id, attr => \%attr);
+  my $client = PerlWM::Client->new(x => $self->{x}, 
+				   id => $id, 
+				   map_request => 1,
+				   attr => \%attr);
 
   $self->{x}->ChangeSaveSet('Insert', $id);
 
