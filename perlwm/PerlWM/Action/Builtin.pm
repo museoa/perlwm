@@ -24,7 +24,7 @@ sub move_opaque {
     }
     $state->{orig_position} = $frame->position();
   }
-  if ($event->{delta}->[0] && $event->{delta}->[1]) {
+  if ($event->{delta}->[0] || $event->{delta}->[1]) {
     $frame->configure(position => [$state->{orig_position}->[0] + $event->{delta}->[0],
 				   $state->{orig_position}->[1] + $event->{delta}->[1]])
   }
@@ -50,7 +50,7 @@ sub resize_opaque {
     $state->{direction} = [$click->[0] < $middle->[0] ? -1 : 1,
 			   $click->[1] < $middle->[1] ? -1 : 1];
   }
-  if ($event->{delta}->[0] && $event->{delta}->[1]) {
+  if ($event->{delta}->[0] || $event->{delta}->[1]) {
     my $position = [@{$state->{orig_position}}];
     my $size = [@{$state->{orig_size}}];
     foreach (0,1) {
@@ -120,9 +120,12 @@ sub move_icon_opaque {
     $state->{orig_position} = $window->position();
     $window->ConfigureWindow(stack_mode => 'Above');
   }
-  if ($event->{delta}->[0] && $event->{delta}->[1]) {
+  if ($event->{delta}->[0] || $event->{delta}->[1]) {
     $window->ConfigureWindow(x => $state->{orig_position}->[0] + $event->{delta}->[0],
 			     y => $state->{orig_position}->[1] + $event->{delta}->[1]);
+  }
+  if ($event->{drag} eq 'stop') {
+    $window->remember_icon_position();
   }
 }
 
