@@ -9,6 +9,8 @@ package PerlWM::X::Property;
 use strict;
 use warnings;
 
+use Storable qw(thaw nfreeze);
+
 ############################################################################
 # icccm   http://tronche.com/gui/x/icccm)
 # ewmh    http://freedesktop.org/standards/wm-spec/
@@ -152,6 +154,7 @@ sub STORE {
 			     $type, $format,
 			     'Replace',
 			     $data);
+  delete $self->{cache}->{$key};
   $value;
 }
 
@@ -279,8 +282,14 @@ sub encode_property {
 		   $value->{icon} || 0)));
   }
   else {
-    use Carp qw(cluck); cluck "?";
-    die "TODO: encode_property($key) - ".join(':',(caller())[1,2]);
+    if (ref($value)) {
+      # allow storing of perl objects as properties with Storable
+      ($type, $format, $data) = ('Perl', 8, nfreeze($value));
+    }
+    else {
+      # scalars are just stored as strings
+      ($type, $format, $data) = ('STRING', 8, $value);
+    }
   }
   $type = $self->{x}->atom($type);
   return ($type, $format, $data);
@@ -305,6 +314,15 @@ sub decode_property {
 
   if ($type_name eq 'STRING') {
     return squash_list(split(/\x00/, $data));
+  }
+  elsif ($type_name eq 'Perl') {
+    if (my $value = eval { thaw($data) }) {
+      return $value;
+    }
+    else {
+      warn "failed to thaw $name(Perl) - $@\n";
+      return undef;
+    }
   }
   elsif ($type_name eq 'UTF8_STRING') {
     use utf8;
