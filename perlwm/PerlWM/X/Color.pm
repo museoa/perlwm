@@ -16,7 +16,7 @@ sub color_init {
   my($self) = @_;
 
   my $s = $self->{root_depth};
-  my $v = $self->visuals()->{$self->root_visual()};
+  my $v = $self->{visuals}->{$self->{root_visual}};
   my($rm, $gm, $bm) = @{$v}{qw(red_mask green_mask blue_mask)};
   my($rs, $gs, $bs) = map { my($m, $r) = ($_, -$s);
 			    while ($m) {
