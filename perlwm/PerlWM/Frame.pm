@@ -251,7 +251,7 @@ sub leave {
   return unless $event->{mode} eq 'Normal';
   return unless $self->{perlwm}->{focus} == $self;
 
-  $self->{x}->SetInputFocus('None', 'None', 'CurrentTime');
+  $self->{perlwm}->SetInputFocus('None', 'CurrentTime');
   $self->{perlwm}->{focus} = $self->{perlwm};
   $self->blend(-1);
   $self->timer_set(0, 'Raise');
@@ -311,7 +311,7 @@ sub deiconify {
 
   my($self) = @_;
   $self->MapWindow();
-  $self->{icon}->UnmapWindow();
+  $self->{icon}->UnmapWindow() if $self->{icon};
   $self->{client}->{prop}->{WM_STATE} = { state => 'Normal' };
 }
 
@@ -403,6 +403,8 @@ sub EVENT { ( __PACKAGE__->SUPER::EVENT,
 
 	      'Drag(Button2)' => action('resize_opaque'),
 	      'Drag(Mod1 Button2)' => action('resize_opaque'),
+
+	      'Key(Mod4 Enter)' => action('iconify_window'),
 
 	      'Key(Mod4 m)' => action('keyboard_move'),
 	      'Key(Mod4 r)' => action('keyboard_resize'),
