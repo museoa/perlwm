@@ -2,7 +2,7 @@
 # $Id$
 #
 
-package PerlWM::Action::Move;
+package PerlWM::Action::Resize;
 
 ############################################################################
 
@@ -33,17 +33,30 @@ sub start {
 
   $target->ConfigureWindow(stack_mode => 'Above');
   $self->{orig_position} = $target->position();
+  $self->{orig_size} = $target->size();
   $self->{position} = [@{$self->{orig_position}}];
+  $self->{size} = [@{$self->{orig_size}}];
+  $self->{edge} = [0, 0];
   return $self;
 }
 
 ############################################################################
 
-sub move_by {
+sub resize_by {
 
   my($self, $delta) = @_;
-  $self->{position}->[$_] += $delta->[$_] for (0,1);
-  $self->{target}->configure(position => $self->{position});
+  for (0, 1) {
+    $self->{edge}->[$_] ||= $delta->[$_];
+    if ($self->{edge}->[$_] < 0) {
+      $self->{position}->[$_] += $delta->[$_];
+      $self->{size}->[$_] -= $delta->[$_];
+    }
+    elsif ($self->{edge}->[$_] > 0) {
+      $self->{size}->[$_] += $delta->[$_];
+    }
+  }
+  $self->{target}->configure(size => $self->{size},
+			     position => $self->{position});
 }
 
 ############################################################################
@@ -51,7 +64,8 @@ sub move_by {
 sub cancel {
 
   my($self) = @_;
-  $self->{target}->configure(position => $self->{orig_position});
+  $self->{target}->configure(size => $self->{orig_size},
+			     position => $self->{orig_position});
   $self->SUPER::cancel();
 }
 
@@ -62,7 +76,7 @@ sub delta_key {
   my($self, $event) = @_;
   return unless my $delta = $DIR{$event->{string}};
   return unless my $factor = $SPEED{$event->{state}};
-  $self->move_by([$delta->[0] * $factor, $delta->[1] * $factor]);
+  $self->resize_by([$delta->[0] * $factor, $delta->[1] * $factor]);
 }
 
 ############################################################################

@@ -63,9 +63,11 @@ sub new {
 
   $self->{blend} = [0, 0];
 
-  $self->{label} = PerlWM::Widget::Label->new(x => $self->{x},
-					      padding => 2,
-					      value => $self->{client}->{prop}->{WM_NAME});
+  $self->{label} = PerlWM::Widget::Label->new
+    (x => $self->{x},
+     padding => 2,
+     value => $self->{client}->{prop}->{WM_NAME});
+
   $self->{label}->create(parent => $self,
 			 x => 2, y => 2,
 			 width => $geom{width}, height => 18);
@@ -83,35 +85,82 @@ sub new {
 
 ############################################################################
 
+sub resize {
+
+  my($self, %arg) = @_;
+  $self->check_size_hints($arg{size}) if $arg{size};
+}
+
+############################################################################
+
+sub geom {
+
+  my($self, %geom) = @_;
+  %geom = $self->GetGeometry() unless %geom || $self->{geom};
+  $self->{geom}->{$_} = $geom{$_} for keys %geom;
+  $self->{geom}->{position} = [@{$self->{geom}}{qw(x y)}];
+  $self->{geom}->{size} = [@{$self->{geom}}{qw(width height)}];
+  return $self->{geom};
+}
+
+############################################################################
+
+sub position {
+
+  my($self) = @_;
+  my $position = $self->geom()->{position};
+  $position->[0] += 2;
+  $position->[1] += 2 + 20;
+  return $position;
+}
+
+############################################################################
+
+sub size {
+
+  my($self) = @_;
+  my $size = $self->geom()->{size};
+  $size->[0] -= 4;
+  $size->[1] -= 4 + 20;
+  return $size;
+}
+
+############################################################################
+
 sub configure {
 
-  my($self, %client) = @_;
+  my($self, %arg) = @_;
 
-  my %arg;
-
-  if (my $size = $client{size}) {
-    $arg{size} = [$size->[0] + 4, $size->[1] + 4 + 20];
+  my($size, $position) = delete @arg{qw(size position)};
+  if ($size) {
+    $arg{width} = $size->[0] + 4;
+    $arg{height} = $size->[1] + 4 + 20;
   }
-  if (my $position = $client{position}) {
-    $arg{position} = [$position->[0] - 2, $position->[1] - 22];
+  if ($position) {
+    $arg{x} = $position->[0] - 2;
+    $arg{y} = $position->[1] - (2 + 20);
   }
-
-  if (my $size = delete $arg{size}) {
-    $arg{width} = $size->[0];
-    $arg{height} = $size->[1];
-  }
-  if (my $position = delete $arg{position}) {
-    $arg{x} = $position->[0];
-    $arg{y} = $position->[1];
-  }
-
-  $arg{stack_mode} = $client{stack_mode} if $client{stack_mode};
-
   if (%arg) {
     $self->ConfigureWindow(%arg);
-    if ($arg{width}) {
-      $self->{label}->ConfigureWindow(width => $arg{width} - 4);
-    }
+    delete $arg{stack_mode};
+    $self->geom(%arg);
+    $self->{label}->ConfigureWindow(width => $arg{width} - 4) if $arg{width};
+    my($x, $y) = delete @arg{qw(x y)};
+    $size = $self->geom()->{size};
+    my %event = ( name => 'ConfigureNotify',
+		  window => $self->{client}->{id},
+		  event => $self->{client}->{id},
+		  x => $x,
+		  y => $y,
+		  width => $size->[0],
+		  height => $size->[1],
+		  border_width => 0,
+		  above_sibling => $self->{id},
+		  override_redirect => 0 );
+    $self->{client}->SendEvent(0, 'StructureNotify', 
+			       $self->{x}->pack_event(%event));
+    $self->{client}->ConfigureWindow(width => $size->[0],
+				     height => $size->[1]) if $size;
   }
 }
 
@@ -229,47 +278,108 @@ sub unmap_notify {
 
 ############################################################################
 
+sub iconify {
+
+  my($self) = @_;
+  $self->{icon} ||= PerlWM::Icon->new
+    (x => $self->{x},
+     frame => $self,
+     name => ($self->{client}->{prop}->{WM_ICON_NAME} ||
+	      $self->{client}->{prop}->{WM_NAME}));
+  $self->{icon}->MapWindow();
+  $self->UnmapWindow();
+}
+
+############################################################################
+
+sub deiconify {
+
+  my($self) = @_;
+  $self->MapWindow();
+  $self->{icon}->UnmapWindow();
+}
+
+############################################################################
+
+sub check_size_hints {
+
+  my($self, $size) = @_;
+
+  return unless my $hints = $self->{prop}->{WM_NORMAL_HINTS};
+
+  foreach (0,1) {
+    if (my $min = $hints->{PMinSize}) {
+      $size->[$_] = $min->[$_] if $size->[$_] < $min->[$_];
+    }
+    if (my $inc = $hints->{PResizeInc}) {
+      my $base = $hints->{PBaseSize};
+      $size->[$_] -= $base->[$_] if $base;
+      $size->[$_] = $inc->[$_] * (int($size->[$_] / $inc->[$_]));
+      $size->[$_] += $base->[$_] if $base;
+    }
+  }
+}
+
+############################################################################
+
 sub prop_wm_name {
 
   my($self, $event) = @_;
   return unless my $client = $self->{client};
-  if ($client->{icon}) {
-    $client->{icon}->{label}->{value} = $client->{prop}->{WM_NAME};
+  my $name = $client->{prop}->{WM_NAME};
+  if ($self->{icon} && (!$client->{prop}->{WM_ICON_NAME})) {
+    $self->{icon}->name($name);
   }
-  $self->{label}->{value} = $client->{prop}->{WM_NAME};
+  $self->{label}->{value} = $name;
+}
+
+############################################################################
+
+sub prop_wm_icon_name {
+
+  my($self, $event) = @_;
+  return unless my $client = $self->{client};
+  return unless my $icon = $self->{icon};
+  my $name = $client->{prop}->{WM_ICON_NAME};
+  $self->{icon}->name($name);
 }
 
 ############################################################################
 
 action_register('keyboard_move', 'PerlWM::Action::Move');
+action_register('keyboard_resize', 'PerlWM::Action::Resize');
 
 sub EVENT { ( __PACKAGE__->SUPER::EVENT,
 
 	      # TODO: load these bindings via some config stuff
-	     'Drag(Button1)' => action('move_opaque'),
-	     'Drag(Mod1 Button1)' => action('move_opaque'),
+	      'Drag(Button1)' => action('move_opaque'),
+	      'Drag(Mod1 Button1)' => action('move_opaque'),
 
-	     'Click(Button1)' => action('raise_window'),
-	     'Click(Mod1 Button1)' => action('raise_window'),
+	      'Click(Button1)' => action('raise_window'),
+	      'Click(Mod1 Button1)' => action('raise_window'),
 
-	     'Click(Button3)' => action('iconify_window'),
-	     'Click(Mod1 Button3)' => action('iconify_window'),
+	      'Click(Button3)' => action('iconify_window'),
+	      'Click(Mod1 Button3)' => action('iconify_window'),
 
-	     'Drag(Button2)' => action('resize_opaque'),
-	     'Drag(Mod1 Button2)' => action('resize_opaque'),
+	      'Drag(Button2)' => action('resize_opaque'),
+	      'Drag(Mod1 Button2)' => action('resize_opaque'),
 
-	     'Key(Mod4 m)' => action('keyboard_move'),
+	      'Key(Mod4 m)' => action('keyboard_move'),
+	      'Key(Mod4 r)' => action('keyboard_resize'),
 
-	     # TODO: config for focus policy
-	     'Enter' => \&enter,
-	     'Leave' => \&leave,
-	     'Timer(Raise)' => \&auto_raise,
-	     'Timer(Blend)' => \&blend,
+	      'Key(Mod4 Up)' => action('raise_window'),
+	      'Key(Mod4 Down)' => action('lower_window'),
 
-	     'ConfigureRequest' => \&configure_request,
-	     'DestroyNotify' => \&destroy_notify,
-	     'MapNotify' => \&map_notify,
-	     'UnmapNotify' => \&unmap_notify ) }
+	      # TODO: config for focus policy
+	      'Enter' => \&enter,
+	      'Leave' => \&leave,
+	      'Timer(Raise)' => \&auto_raise,
+	      'Timer(Blend)' => \&blend,
+
+	      'ConfigureRequest' => \&configure_request,
+	      'DestroyNotify' => \&destroy_notify,
+	      'MapNotify' => \&map_notify,
+	      'UnmapNotify' => \&unmap_notify ) }
 
 ############################################################################
 

@@ -77,7 +77,7 @@ sub resize_opaque {
       else {
 	$size->[$_] += $event->{delta}->[$_];
       }
-    }    
+    }
     $client->configure(position => $position, size => $size);
   }
   return 1;
@@ -88,17 +88,7 @@ sub resize_opaque {
 sub lower_window {
 
   my($window, $event) = @_;
-  my($frame, $client);
-  if ($window->isa('PerlWM::Frame')) {
-    $frame = $window;
-    $client = $frame->{client};
-  }
-  elsif ($window->isa('PerlWM::Client')) {
-    $client = $window;
-    $frame = $client->{frame};
-  }
-  $frame->ConfigureWindow(stack_mode => 'Below');
-  return 1;
+  $window->ConfigureWindow(stack_mode => 'Below');
 }
 
 ############################################################################
@@ -106,17 +96,7 @@ sub lower_window {
 sub raise_window {
 
   my($window, $event) = @_;
-  my($frame, $client);
-  if ($window->isa('PerlWM::Frame')) {
-    $frame = $window;
-    $client = $frame->{client};
-  }
-  elsif ($window->isa('PerlWM::Client')) {
-    $client = $window;
-    $frame = $client->{frame};
-  }
-  $frame->ConfigureWindow(stack_mode => 'Above');
-  return 1;
+  $window->ConfigureWindow(stack_mode => 'Above');
 }
 
 
@@ -125,16 +105,7 @@ sub raise_window {
 sub iconify_window {
 
   my($window, $event) = @_;
-  my($frame, $client);
-  if ($window->isa('PerlWM::Frame')) {
-    $frame = $window;
-    $client = $frame->{client};
-  }
-  elsif ($window->isa('PerlWM::Client')) {
-    $client = $window;
-    $frame = $client->{frame};
-  }
-  $client->iconify();
+  $window->iconify();
 }
 
 ############################################################################
@@ -142,8 +113,7 @@ sub iconify_window {
 sub deiconify_window {
 
   my($window, $event) = @_;
-  return unless my $client = $window->{client};
-  $client->deiconify();
+  $window->{frame}->deiconify();
 }
 
 ############################################################################

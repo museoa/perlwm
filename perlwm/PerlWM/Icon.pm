@@ -21,13 +21,7 @@ sub new {
   my $class = ref($proto) || $proto || __PACKAGE__;
   my $self = $class->SUPER::new(%args);
 
-  my %geom;
-  if ($self->{client}->{frame}) {
-    %geom = $self->{client}->{frame}->GetGeometry();
-  }
-  else {
-    %geom = $self->{client}->GetGeometry();
-  }
+  my %geom = $self->{frame}->GetGeometry();
 
   $self->create(x => $geom{x},
 		y => $geom{y},
@@ -35,21 +29,34 @@ sub new {
 		height => 4 + 18,
 		background_pixel => $self->{x}->{white_pixel});
 
-  $self->{label} = PerlWM::Widget::Label->new(x => $self->{x},
-					      padding => 2,
-					      resize => 'auto',
-					      value => $self->{client}->{prop}->{WM_NAME});
+  $self->{label} = PerlWM::Widget::Label->new
+    (x => $self->{x},
+     padding => 2,
+     resize => 'auto',
+     value => $self->{name});
+
   $self->{label}->create(parent => $self,
 			 x => 2, y => 2,
 			 width => 'auto', height => 'auto');
   $self->{label}->MapWindow();
 
   %geom = $self->{label}->GetGeometry();
-  $self->ConfigureWindow(width => $geom{width} + 4, height => $geom{height} + 4);
-
-  $self->{client}->{icon} = $self;
+  $self->ConfigureWindow(width => $geom{width} + 4, 
+			 height => $geom{height} + 4);
 
   return $self;
+}
+
+############################################################################
+
+sub name {
+
+  my($self, $name) = @_;
+  $self->{label}->{value} = $name;
+  $self->{label}->resize();
+  my %geom = $self->{label}->GetGeometry();
+  $self->ConfigureWindow(width => $geom{width} + 4, 
+			 height => $geom{height} + 4);
 }
 
 ############################################################################

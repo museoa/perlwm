@@ -30,17 +30,16 @@ sub new {
 
   PerlWM::Widget->init($x);
 
-  my(@clients);  
+  my(@clients);
   eval {
-    local $self->{x}->{error_handler} = sub { 
-      die "Window Manager already running\n"; 
+    local $self->{x}->{error_handler} = sub {
+      die "Window Manager already running\n";
     };
     my $ssr = $self->{x}->pack_event_mask('SubstructureRedirect');
     $self->ChangeWindowAttributes(id => $self->{id},
 				  event_mask => $self->event_mask($ssr));
     (undef, undef, @clients) = $self->{x}->QueryTree($self->{x}->{root});
     $self->manage_window($_) for @clients;
-    $self->SetInputFocus('None', 'CurrentTime');
     $self->{focus} = $self;
   };
   if ($@) {
