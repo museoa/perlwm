@@ -156,7 +156,7 @@ sub event_class {
       $v = $window->can($v) unless ref $v;
       $self->event_handler_parse($result, $k, $v);
     }
-    $self->{event}->{$class} = $result;    
+    $self->{event}->{$class} = $result;
   }
   return $result;
 }
@@ -168,7 +168,7 @@ sub event_window_mask {
   my($self, $window, $mask) = @_;
 
   $mask ||= 0;
-  my @grab;
+  my %grab;
 
   foreach my $event ($self->event_class($window)) {
     while (my($k, $v) = each %{$event}) {
@@ -178,7 +178,13 @@ sub event_window_mask {
 	  if (my $button = $RALL_BITS{$_ & $BUT_MASK}) {
 	    $bmask |= $self->pack_event_mask("${button}Motion") if $k eq 'Drag';
 	    $button =~ s/^Button//;
-	    push @grab, [$_ & $MOD_MASK, $button, $bmask];
+	    my $key = $_ & ($MOD_MASK | $BUT_MASK);
+	    if ($grab{$key}) {
+	      $grab{$key}->[2] |= $bmask;
+	    }
+	    else {
+	      $grab{$key} = [$_ & $MOD_MASK, $button, $bmask];
+	    }
 	  }
 	}
 	$mask |= $bmask;
@@ -188,7 +194,7 @@ sub event_window_mask {
       }
     }
   }
-  return $mask, @grab if wantarray;
+  return $mask, values %grab if wantarray;
   return $mask;
 }
 
@@ -197,7 +203,7 @@ sub event_window_mask {
 sub event_window_detach {
 
   my($self, $window, %args) = @_;
-  
+
   unless ($args{destroyed}) {
     $window->ChangeWindowAttributes(event_mask => 0);
     $self->UngrabButton('AnyModifier', 'AnyButton', $window->{id});
@@ -283,16 +289,18 @@ sub event_loop {
 	    $adjust = $timer->[0];
 	  }
 	  # adjust other timers 
-	  $_->[0] -= $adjust for @{$self->{timer}};
+	  if ($adjust) {
+	    $_->[0] -= $adjust for @{$self->{timer}};
+	  }
 	}
       }
     }
     else {
       # just wait for the next event
       %event = $self->next_event();
-      $self->event_trace(\%event);
     }
     if (%event) {
+      $self->event_trace(\%event);
       # remember the server time if we need it
       $time = $event{time} if $event{time} && !$hires;
       # deal with mouse events
