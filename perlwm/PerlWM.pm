@@ -29,32 +29,31 @@ sub perlwm {
 
   $self->{x} = PerlWM::X->new($ENV{DISPLAY});
 
-  $self->{x}->event_add_class
-    ('PerlWM::Frame', 'Enter', undef,
+  $self->{x}->event_add_hook
+    ('PerlWM::Frame', 'Enter', 
      sub { 
-       my($event) = @_;
-       my $frame = $event->{window};
+       my($frame, $event) = @_;
        $frame->{client}->SetInputFocus('None', 'CurrentTime');
        $frame->ConfigureWindow(stack_mode => 'Above');
      });
 
-  $self->{x}->event_add_class('PerlWM::Frame', 'Drag', 'Button1', \&move_opaque);
-  $self->{x}->event_add_class('PerlWM::Client', 'Drag', 'Mod1 Button1', \&move_opaque);
+  $self->{x}->event_add_hook('PerlWM::Frame', 'Drag(Button1)', \&move_opaque);
+  $self->{x}->event_add_hook('PerlWM::Client', 'Drag(Mod1 Button1)', \&move_opaque);
   
-  $self->{x}->event_add_class('PerlWM::Frame', 'Click', 'Button2', \&lower_window);
-  $self->{x}->event_add_class('PerlWM::Client', 'Click', 'Mod1 Button2', \&lower_window);
+  $self->{x}->event_add_hook('PerlWM::Frame', 'Click(Button2)', \&lower_window);
+  $self->{x}->event_add_hook('PerlWM::Client', 'Click(Mod1 Button2)', \&lower_window);
 
-  $self->{x}->event_add_class('PerlWM::Frame', 'Drag', 'Button3', \&size_drag);
-  $self->{x}->event_add_class('PerlWM::Client', 'Drag', 'Mod1 Button3', \&size_drag);
+  $self->{x}->event_add_hook('PerlWM::Frame', 'Drag(Button3)', \&size_drag);
+  $self->{x}->event_add_hook('PerlWM::Client', 'Drag(Mod1 Button3)', \&size_drag);
 
-  $self->{x}->event_add_class('PerlWM::Frame', 'DestroyNotify', undef, \&destroy_notify);
-  $self->{x}->event_add_class('PerlWM::Frame', 'MapNotify', undef, \&map_notify);
-  $self->{x}->event_add_class('PerlWM::Frame', 'UnmapNotify', undef, \&unmap_notify);
+  $self->{x}->event_add_hook('PerlWM::Frame', 'DestroyNotify', \&destroy_notify);
+  $self->{x}->event_add_hook('PerlWM::Frame', 'MapNotify', \&map_notify);
+  $self->{x}->event_add_hook('PerlWM::Frame', 'UnmapNotify', \&unmap_notify);
 
-  $self->{x}->event_add_global('MapRequest', undef, 
+  $self->{x}->event_add_global('MapRequest', 
 			       { sub => sub {
-				   my($self, $event) = @_;
-				   $self->manage_window($event->{window}, 1);
+				   my($window, $event, $self) = @_;
+				   $self->manage_window($window, 1);
 				 },
 				 arg => [ $self ] });
 
@@ -110,14 +109,14 @@ sub manage_window {
 
 sub move_opaque {
 
-  my($event) = @_;
+  my($window, $event) = @_;
   my($frame, $client);
-  if ($event->{window}->isa('PerlWM::Frame')) {
-    $frame = $event->{window};
+  if ($window->isa('PerlWM::Frame')) {
+    $frame = $window;
     $client = $frame->{client};
   }
-  elsif ($event->{window}->isa('PerlWM::Client')) {
-    $client = $event->{window};
+  elsif ($window->isa('PerlWM::Client')) {
+    $client = $window;
     $frame = $client->{frame};
   }
   my $state = $event->{state};
@@ -137,14 +136,14 @@ sub move_opaque {
 sub size_drag {
 
   #-------------------------------------------------------------
-  my($event) = @_;
+  my($window, $event) = @_;
   my($frame, $client);
-  if ($event->{window}->isa('PerlWM::Frame')) {
-    $frame = $event->{window};
+  if ($window->isa('PerlWM::Frame')) {
+    $frame = $window;
     $client = $frame->{client};
   }
-  elsif ($event->{window}->isa('PerlWM::Client')) {
-    $client = $event->{window};
+  elsif ($window->isa('PerlWM::Client')) {
+    $client = $window;
     $frame = $client->{frame};
   }
   my $state = $event->{state};
@@ -181,15 +180,15 @@ sub size_drag {
 
 sub lower_window {
 
-  my($event) = @_;
+  my($window, $event) = @_;
   my($frame, $client);
   #------------------------------------------
-  if ($event->{window}->isa('PerlWM::Frame')) {
-    $frame = $event->{window};
+  if ($window->isa('PerlWM::Frame')) {
+    $frame = $window;
     $client = $frame->{client};
   }
-  elsif ($event->{window}->isa('PerlWM::Client')) {
-    $client = $event->{window};
+  elsif ($window->isa('PerlWM::Client')) {
+    $client = $window;
     $frame = $client->{frame};
   }
   #------------------------------------------
@@ -201,27 +200,27 @@ sub lower_window {
 
 sub destroy_notify {
 
-  my($event) = @_;
-  return unless ref $event->{window};
-  $event->{window}->DestroyWindow();
+  my($window, $event) = @_;
+  return unless ref $window;
+  $window->DestroyWindow();
 }
 
 ############################################################################
 
 sub map_notify {
 
-  my($event) = @_;
-  return unless ref $event->{window};
-  $event->{window}->MapWindow();
+  my($window, $event) = @_;
+  return unless ref $window;
+  $window->MapWindow();
 }
 
 ############################################################################
 
 sub unmap_notify {
 
-  my($event) = @_;
-  return unless ref $event->{window};
-  $event->{window}->UnmapWindow();
+  my($window, $event) = @_;
+  return unless ref $window;
+  $window->UnmapWindow();
 }
 
 ############################################################################

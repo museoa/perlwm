@@ -16,7 +16,9 @@ use warnings;
 Notes
 =====
 
-meta => kind of event hook - window, class, global
+meta => kind of event hook - window, hook, class, global
+        (class comes from oo class hierarchy / event() class methods)
+        (hooks can be installed at the class level)
 
 value => what the meta-value was - windowid, classid, undef
 
@@ -62,7 +64,7 @@ sub event_init {
 
   my($self) = @_;
 
-  $self->{event} = { window => {}, class => {}, global => {} };
+  $self->{event} = { window => {}, hook => {}, global => {} };
 
   $self->{timer} = [];
 
@@ -110,18 +112,22 @@ sub event_timer {
 
 ############################################################################
 
-sub event_add {
+sub event_handler_parse {
 
-  my($self, $meta, $value, $event, $arg, $handler) = @_;
+  my($self, $hash, $event, $handler) = @_;
 
   $handler = { sub => $handler } if ref $handler eq 'CODE';
   $handler->{arg} ||= [];
 
-  my $hash = $self->{event}->{$meta};
-  $hash = ($hash->{$value} ||= {}) if $meta ne 'global';
-
-  if (defined($arg)) {
-    $arg = $self->event_button_pack(split / /, $arg) if $event =~ $MOUSE_EVENT;
+  my $arg;
+  if ($event =~ s/\(([^\)]*)\)$//) {
+    $arg = $1;
+  }
+  if ($event =~ $MOUSE_EVENT) {
+    my $button = $self->event_button_pack(split /\s+/, $arg);
+    $hash->{$event}->{$button} = $handler;
+  }
+  elsif ($arg) {
     $hash->{$event}->{$arg} = $handler;
   }
   else {
@@ -131,31 +137,86 @@ sub event_add {
 
 ############################################################################
 
+sub event_add {
+
+  my($self, $meta, $value, $event, $handler) = @_;
+
+  my $hash = $self->{event}->{$meta};
+  $hash = ($hash->{$value} ||= {}) if $meta ne 'global';
+
+  $self->event_handler_parse($hash, $event, $handler);
+}
+
+############################################################################
+
 sub event_add_window {
 
-  my($self, $window, $event, $arg, $handler) = @_;
+  my($self, $window, $event, $handler) = @_;
   
   die "not a window\n" unless $window->isa('PerlWM::X::Window');
-  $self->event_add('window', $window->{id}, $event, $arg, $handler);
+  $self->event_add('window', $window->{id}, $event, $handler);
   $self->event_window_hook($window);
 }
 
 ############################################################################
 
-sub event_add_class {
+sub event_add_hook {
 
-  my($self, $class, $event, $arg, $handler) = @_;
+  my($self, $class, $event, $handler) = @_;
 
-  $self->event_add('class', $class, $event, $arg, $handler);
+  $self->event_add('hook', $class, $event, $handler);
 }
 
 ############################################################################
 
 sub event_add_global {
 
-  my($self, $event, $arg, $handler) = @_;
+  my($self, $event, $handler) = @_;
 
-  $self->event_add('global', undef, $event, $arg, $handler);
+  $self->event_add('global', undef, $event, $handler);
+}
+
+############################################################################
+
+sub event_window_hook_list {
+
+  my($self, $window) = @_;
+
+  my $bottom = ref $window;
+
+  if (!exists $self->{window_hook_list}->{$bottom}) {
+    my(@walk, @result, %seen) = ($bottom);
+    while (my $class = shift @walk) {
+      next if $seen{$class}++;
+      if (my $hook = $self->{event}->{hook}->{$class}) {
+	push @result, %{$hook};
+      }
+      push @walk, eval "\@${class}::ISA";
+      die $@ if $@;
+    }
+    $self->{window_hook_list}->{$bottom} = { @result };
+  }
+  return $self->{window_hook_list}->{$bottom};
+}
+
+############################################################################
+
+sub event_window_class_list {
+
+  my($self, $window) = @_;
+
+  my $class = ref $window;
+  if (!exists $self->{window_class_list}->{$class}) {
+    my $cl = { eval "$class->EVENT()" };
+    die $@ if $@;
+    my $rcl = {};
+    while (my($k, $v) = each %{$cl}) {
+      $v = $window->can($v) unless ref $v;
+      $self->event_handler_parse($rcl, $k, $v);
+    }
+    $self->{window_class_list}->{$class} = $rcl;    
+  }
+  return $self->{window_class_list}->{$class};
 }
 
 ############################################################################
@@ -173,7 +234,8 @@ sub event_window_hook {
   my $mask = $window->{extra_event_mask} || 0;
 
   foreach my $event ($self->{event}->{window}->{$window->{id}},
-		     $self->{event}->{class}->{ref $window},
+		     $self->event_window_hook_list($window),
+		     $self->event_window_class_list($window),
 		     $self->{event}->{global}) {
     while (my($k, $v) = each %{$event}) {
       if ($k =~ $MOUSE_EVENT) {
@@ -350,25 +412,35 @@ sub event_loop {
 	$event{name} = $XEVENT_TO_EVENT{$event{name}} || $event{name};
       }
       # dispatch the event
-      my($id, $window, $value, $target);
+      my($id, $window, $target);
       my($name, $arg) = ($event{name}, $event{arg});
       # find the most specific event binding
-      foreach my $meta (qw(window class global)) {
+      foreach my $meta (qw(window hook class global)) {
 	# use various event window fields
 	foreach my $field (qw(event child window)) {
 	  next unless $id = $event{$field};
 	  if ($meta eq 'global') {
 	    next unless $target = $self->{event}->{global}->{$name};
-	    ($window, $value) = ($id, 'global');
+	    $window = $id;
 	  }
-	  else {
-	    $window = $self->{window}->{$id};
-	    next unless $value = ($meta eq 'window') ? $id : ref $window;
-	    next unless $target = $self->{event}->{$meta}->{$value}->{$name};
+	  elsif ($meta eq 'hook') {
+	    next unless $window = $self->{window}->{$id};
+	    my $hook_list = $self->event_window_hook_list($window);
+	    next unless $target = $hook_list->{$name};
+	  }
+	  elsif ($meta eq 'class') {
+	    next unless $window = $self->{window}->{$id};
+	    my $hook_list = $self->event_window_class_list($window);
+	    next unless $target = $hook_list->{$name};
+	  }
+	  elsif ($meta eq 'window') {
+	    next unless $target = $self->{event}->{window}->{$id}->{$name};
 	  }
 	  next unless (!defined($arg)) || ($target = $target->{$arg});
-	  @event{qw(meta value window x)} = ($meta, $value, $window, $self);
-	  next event if &{$target->{sub}}(@{$target->{arg}}, \%event);
+	  @event{qw(meta window x)} = ($meta, $window, $self);
+	  next event if &{$target->{sub}}($event{window}, 
+					  \%event,
+					  @{$target->{arg}});
 	}
       }
     }

@@ -115,6 +115,12 @@ sub get_unpack_property {
 
 ############################################################################
 
+sub EVENT {
+  return ();
+}
+
+############################################################################
+
 sub AUTOLOAD {
   # this is just lazy really
   no strict 'vars';
@@ -123,7 +129,8 @@ sub AUTOLOAD {
   my $class = ref $self;
   $method =~ s/\Q$class\E:://;
   return if $method =~ /^DESTROY/;
-  die "no id\n" unless $self->{id};
+  die "uh-oh ($self->$method())\n" unless ref $self;
+  die "no id ($method)\n" unless $self->{id};
   $self->{x}->$method($self->{id}, @args);
 }
 
