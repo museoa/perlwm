@@ -16,13 +16,16 @@ my $MOUSE_EVENT = qr/^(?:Click|Drag)$/;
 
 my $MOD_MASK = 0x000ff;
 my $BUT_MASK = 0x01f00;
-my $NUM_MASK = 0x3e000;
+my $KEY_MASK = 0x07f00;
+my $NUM_MASK = 0xf8000;
 
 my %MOD_BITS = (Shift => 0x01, Lock => 0x02, Control => 0x04, 
 		map {("Mod$_" => (0x04 << $_))} (1..5));
-my %BUT_BITS = map {("Button$_" => (0x80 << $_))} (1..5);
-my %NUM_BITS = (Single => 0x2000, Double => 0x4000, Triple => 0x8000,
-		Quad => 0x10000, Pent => 0x20000);
+my $BUT_BIT0 = 0x80;
+my %BUT_BITS = map {("Button$_" => ($BUT_BIT0 << $_))} (1..5);
+my %NUM_BITS = (Single => 0x8000, Double => 0x10000, Triple => 0x20000,
+		Quad => 0x40000, Pent => 0x80000);
+my $KEY_SHIFT = 8;
 
 my %ALL_BITS = (%MOD_BITS, %BUT_BITS, %NUM_BITS);
 my %RALL_BITS = reverse %ALL_BITS;
@@ -30,16 +33,19 @@ my %RALL_BITS = reverse %ALL_BITS;
 my %EVENT_TO_XMASK = (Enter => 'EnterWindow',
 		      Leave => 'LeaveWindow',
 		      Expose => 'Exposure',
+		      Key => 'KeyPress',
 		      Property => 'PropertyChange');
 
 my %XEVENT_TO_EVENT = (EnterNotify => 'Enter',
 		       LeaveNotify => 'Leave',
+		       KeyPress => 'Key',
 		       PropertyNotify => 'Property');
 
 my %EVENT_TO_ARG = (Property => 'atom');
 
 my %EVENT_TRACE = (PropertyNotify => [qw(window atom)],
 		   ConfigureRequest => [qw(window)],
+		   KeyPress => [qw(state key)],
 		   DestroyNotify => [qw(event window)],
 		   EnterNotify => [qw(event child detail mode)],
 		   LeaveNotify => [qw(event child detail mode)]);
@@ -83,9 +89,35 @@ sub event_button_unpack {
 
   my($self, $value) = @_;
   for (my $button = 1; $button <= 5; $button++) {
-    return ($value & 0xff, $button) if ($value & (0x80 << $button));
+    return ($value & $MOD_MASK, $button) if ($value & ($BUT_BIT0 << $button));
   }
   return (0, 0);
+}
+
+############################################################################
+
+sub event_key_pack {
+
+  my($self, @bits) = @_;
+  return 0 unless @bits;
+  my $result = 0;
+  foreach (@bits) {
+    if (/^[ -~]$/) {
+      $result |= $self->keycode(ord($_)) << $KEY_SHIFT;
+    }
+    else {
+      $result |= $ALL_BITS{$_};
+    }
+  }
+  return $result;
+}
+
+############################################################################
+
+sub event_key_unpack {
+
+  my($self, $value) = @_;
+  return (($value & $MOD_MASK) && (($value & $KEY_MASK) >> $KEY_SHIFT));
 }
 
 ############################################################################
@@ -130,6 +162,9 @@ sub event_handler_parse {
   elsif ($event eq 'Property') {
     # atomise property name
     $arg = $self->atom($arg);
+  }
+  elsif ($event eq 'Key') {
+    $arg = $self->event_key_pack(split /\s+/, $arg);
   }
 
   # add to event table
@@ -179,16 +214,28 @@ sub event_window_mask {
 	  if (my $button = $RALL_BITS{$_ & $BUT_MASK}) {
 	    $bmask |= $self->pack_event_mask("${button}Motion") if $k eq 'Drag';
 	    $button =~ s/^Button//;
-	    my $key = $_ & ($MOD_MASK | $BUT_MASK);
-	    if ($grab{$key}) {
-	      $grab{$key}->[2] |= $bmask;
+	    my $h = sprintf("B%08x", ($_ & ($MOD_MASK | $BUT_MASK)));
+	    if ($grab{$h}) {
+	      $grab{$h}->{mask} |= $bmask;
 	    }
 	    else {
-	      $grab{$key} = [$_ & $MOD_MASK, $button, $bmask];
+	      $grab{$h} = { type => 'Button', 
+			    mods => ($_ & $MOD_MASK),
+			    button => $button, 
+			    mask => $bmask };
 	    }
 	  }
 	}
 	$mask |= $bmask;
+      }
+      elsif ($k eq 'Key') {
+	$mask |= $self->pack_event_mask(qw(KeyPress));
+	foreach (keys %{$v}) {
+	  my $h = sprintf("K%08x", ($_ & ($MOD_MASK | $KEY_MASK)));
+	  $grab{$h} = { type => 'Key', 
+			mods => ($_ & $MOD_MASK), 
+			key => (($_ & $KEY_MASK) >> $KEY_SHIFT) };
+	}
       }
       else {
 	$mask |= $self->pack_event_mask($EVENT_TO_XMASK{$k} || $k);
@@ -223,6 +270,10 @@ sub event_trace {
     my @a = map { 
       if ($_ eq 'atom') {
 	"$_:".$self->atom_name($e->{$_});
+      }
+      elsif ($_ eq 'key') {
+	my $keysym = $self->keysym($e->{detail});
+	"$_:".sprintf("%c [c:%02x s:%02x]", $keysym, $e->{detail}, $keysym);
       }
       elsif ($e->{$_} =~ /^\d+$/) {
 	"$_:".sprintf("0x%08x", $e->{$_});
@@ -334,7 +385,7 @@ sub event_loop {
 	elsif ($event{name} eq 'ButtonPress') {
 	  $self->{mouse}->{bits} = 
 	    (($event{state} & $MOD_MASK) |
-	     ($BUT_BITS{Button1} << ($event{detail} - 1)) |
+	     ($BUT_BIT0 << $event{detail}) |
 	     ($NUM_BITS{Single} << ($self->{mouse}->{click_count})));
 	  $self->{mouse}->{target} = $event{event};
 	  $self->{mouse}->{click_count}++;
@@ -391,6 +442,11 @@ sub event_loop {
 	    $window->{prop_obj}->flush_cache($event{atom}, $event{state});
 	  }
 	}
+	elsif ($event{name} eq 'Key') {
+	  # build the arg up from the mods/key
+	  $event{arg} = (($event{state} & $MOD_MASK) |
+			 ($event{detail} << $KEY_SHIFT));
+	}
       }
       # dispatch the event
       my($id, $window, $target);
@@ -402,7 +458,8 @@ sub event_loop {
 	next unless $target = $self->{event}->{ref $window}->{$name};
 	next unless (!defined($arg)) || ($target = $target->{$arg});
 	@event{qw(window x)} = ($window, $self);
-	$target->($window, \%event);
+	eval { $target->($window, \%event); };
+	warn "$target - $@" if $@;
 	next event;
       }
     }

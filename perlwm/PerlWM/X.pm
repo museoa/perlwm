@@ -158,6 +158,37 @@ sub alien {
 
 ############################################################################
 
+sub keycode {
+
+  my($self, $keysym) = @_;
+  unless ($self->{keycode}) {
+    my(@keys) = 
+      $self->GetKeyboardMapping($self->{min_keycode}, 
+				$self->{max_keycode} - $self->{min_keycode});
+    my $keycode = $self->{min_keycode}; 
+    foreach my $ks (@keys) {
+      foreach (@{$ks}) {
+	next unless $_;
+	push @{$self->{keycode}->{$keycode}}, $_;
+	push @{$self->{keysym}->{$_}}, $keycode;
+      }
+      $keycode++;
+    }
+  }
+  return $self->{keysym}->{$keysym}->[0];
+}
+
+############################################################################
+
+sub keysym {
+
+  my($self, $keycode) = @_;
+  $self->keycode(0) unless $self->{keycode};
+  return $self->{keycode}->{$keycode}->[0];
+}
+
+############################################################################
+
 sub dumper {
 
   my($self, @args) = @_;

@@ -55,15 +55,22 @@ sub new {
 		width => $geom{width} + 4,
 		height => $geom{height} + 4 + 20,
 		background_pixel => $BLEND[0],
-		event_mask => $self->event_mask($mask));
+		event_mask => scalar $self->event_mask($mask));
 
   $self->{blend} = [0, 0];
   
   foreach (@grab) {
     # set up grabs from the client
-    $self->{x}->GrabButton($_->[0], $_->[1], $self->{id}, 0, $_->[2],
-			   'Asynchronous', 'Asynchronous', 'None', 'None');
-    
+    if ($_->{type} eq 'Button') {
+      $self->{x}->GrabButton($_->{mods}, $_->{button}, 
+			     $self->{id}, 0, $_->{mask},
+			     'Asynchronous', 'Asynchronous', 'None', 'None');
+    }
+    elsif ($_->{type} eq 'Key') {
+      $self->{x}->GrabKey($_->{key}, $_->{mods}, 
+			  $self->{id}, 0, 
+			  'Asynchronous', 'Asynchronous');
+    }
   }
 
   $self->{label} = PerlWM::Widget::Label->new(x => $self->{x},
@@ -260,6 +267,8 @@ sub EVENT {
 
 	  'Drag(Button2)' => \&PerlWM::Action::resize_opaque,
 	  'Drag(Mod1 Button2)' => \&PerlWM::Action::resize_opaque,
+
+	  'Key(Mod4 m)' => sub { print "key(f)\n" },
 
 	  # TODO: config for focus policy
 	  'Enter' => \&enter,
