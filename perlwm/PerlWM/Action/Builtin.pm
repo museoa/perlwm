@@ -131,6 +131,7 @@ sub move_icon_opaque {
 sub focus_previous {
 
   my($frame, $event) = @_;
+  $frame->leave({mode => 'Normal'});
   $frame = $frame->find_frame(-1);
   $frame->ConfigureWindow(stack_mode => 'Above');
   $frame->warp_to([-10, 10]);
@@ -141,6 +142,7 @@ sub focus_previous {
 sub focus_next {
 
   my($frame, $event) = @_;
+  $frame->leave({mode => 'Normal'});
   $frame = $frame->find_frame(1);
   $frame->ConfigureWindow(stack_mode => 'Above');
   $frame->warp_to([-10, 10]);
