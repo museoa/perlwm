@@ -11,19 +11,17 @@ use warnings;
 
 use base qw(PerlWM::X::Window);
 
+use PerlWM::Config;
+
 ############################################################################
 
-sub init {
+BEGIN {
 
-  my($class, $x) = @_;
-
-  $x->color_add('widget_background', 'black');
-  $x->color_add('widget_foreground', 'white');
-  $x->font_add('widget_font', '-b&h-lucida-medium-r-normal-*-*-100-*-*-p-*-iso8859-1');
-  $x->gc_add('widget', { foreground => 'widget_foreground',
-			 background => 'widget_background',
-			 font => 'widget_font' });
-}
+  my $config = PerlWM::Config->new('default/widget');
+  $config->set(background => 'black',
+	       foreground => 'white',
+	       font => '-b&h-lucida-medium-r-normal-*-*-100-*-*-p-*-iso8859-1');
+};
 
 ############################################################################
 
