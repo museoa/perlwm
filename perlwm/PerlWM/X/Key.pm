@@ -45,9 +45,9 @@ sub key_init {
 
 sub key_code_to_sym {
 
-  my($self, $code) = @_;
+  my($self, $code, $offset) = @_;
   my $key = $self->{key} || $self->key_init();
-  return $key->{code}->{$code}->[0];
+  return $key->{code}->{$code}->[$offset || 0];
 }
 
 ############################################################################
