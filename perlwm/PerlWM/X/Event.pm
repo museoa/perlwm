@@ -375,7 +375,7 @@ sub event_loop {
 	  # is there an event ready now?
 	  if (%event = $self->dequeue_event()) {
 	    # use server time if we don't have time::hires
-	    $adjust = $event{time} - $time unless $hires;
+	    $adjust = $event{time} - $time if ((!$hires) && ($event{time}));
 	  }
 	} 
 	else {
@@ -440,6 +440,8 @@ sub event_loop {
 	  $self->{mouse}->{drag}++;
 	  if ($self->{mouse}->{drag} == $DRAG_THRESHOLD) {
 	    $self->{mouse}->{drag_state} = { };
+	    $self->{mouse}->{click_count} = 0;
+	    $self->event_timer(0, $self->{mouse});
 	    %fire = (%event, 
 		     name => 'Drag', 
 		     state => $self->{mouse}->{drag_state},
