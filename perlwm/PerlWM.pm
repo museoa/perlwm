@@ -29,21 +29,8 @@ sub new {
 
   PerlWM::Widget->init($x);
 
-  $self->init_wm();
-
-  $self->{x}->event_loop() unless $self->{no_event_loop};
-
-  return $self;
-}
-
-############################################################################
-
-sub init_wm {
-
-  my($self) = @_;
-
   my(@clients);  
-  {
+  eval {
     local $self->{x}->{error_handler} = sub { 
       die "Window Manager already running\n"; 
     };
@@ -51,9 +38,19 @@ sub init_wm {
     $self->ChangeWindowAttributes(id => $self->{id},
 				  event_mask => $self->event_mask($ssr));
     (undef, undef, @clients) = $self->{x}->QueryTree($self->{x}->{root});
+    $self->manage_window($_) for @clients;
+    $self->SetInputFocus('None', 'CurrentTime');
+    $self->{focus} = $self;
+  };
+  if ($@) {
+    warn $@;
+    return undef;
   }
-
-  $self->manage_window($_) for @clients;
+  else {
+    $self->{x}->event_loop();
+    # won't actually get here
+    return $self;
+  }
 }
 
 ############################################################################
@@ -68,6 +65,7 @@ sub manage_window {
   return if ((!$map_request) && ($attr{map_state} ne 'Viewable'));
 
   return PerlWM::Frame->new(x => $self->{x},
+			    perlwm => $self,
 			    client_id => $id, 
 			    client_attr => \%attr,
 			    map_request => $map_request);
