@@ -47,6 +47,13 @@ sub perlwm {
   $self->{x}->event_add_class('PerlWM::Frame', 'Drag', 'Button3', \&size_drag);
   $self->{x}->event_add_class('PerlWM::Client', 'Drag', 'Mod1 Button3', \&size_drag);
   
+  $self->{x}->event_add_global('MapRequest', undef, 
+			       { sub => sub {
+				   my($self, $event) = @_;
+				   $self->manage_window($event->{window}, 1);
+				 },
+				 arg => [ $self ] });
+
   $self->init_wm();
 
   $self->{x}->event_loop() unless $self->{no_event_loop};
@@ -77,17 +84,22 @@ sub init_wm {
 
 sub manage_window {
 
-  my($self, $id) = @_;
+  my($self, $id, $map_request) = @_;
 
   my(%attr) = $self->{x}->GetWindowAttributes($id);
 
-  return if (($attr{override_redirect}) || ($attr{map_state} ne 'Viewable'));
+  return if $attr{override_redirect};
+  return if ((!$map_request) && ($attr{map_state} ne 'Viewable'));
+
+  $self->{x}->MapWindow($id) if $map_request;
 
   my $client = PerlWM::Client->new(x => $self->{x}, id => $id, attr => \%attr);
 
   $self->{x}->ChangeSaveSet('Insert', $id);
 
   $client->{frame} = PerlWM::Frame->new(x => $self->{x}, client => $client);
+
+  return $client;
 }
 
 ############################################################################

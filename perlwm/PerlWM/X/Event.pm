@@ -292,7 +292,7 @@ sub event_loop {
 		     state => $self->{mouse}->{drag_state},
 		     event => $self->{mouse}->{target},
 		     press => $self->{mouse}->{press},
-		     xevent => \%event,
+		     xevent => {%event},
 		     arg => $self->{mouse}->{bits},
 		     drag => 'stop');
 	  }
@@ -300,7 +300,7 @@ sub event_loop {
 	    %fire = (%event, 
 		     name => 'Click',
 		     event => $self->{mouse}->{target},
-		     xevent => \%event,
+		     xevent => {%event},
 		     arg => $self->{mouse}->{bits});
 	  }
 	} 
@@ -324,7 +324,7 @@ sub event_loop {
 		     state => $self->{mouse}->{drag_state},
 		     event => $self->{mouse}->{target},
 		     press => $self->{mouse}->{press},
-		     xevent => \%event,
+		     xevent => {%event},
 		     arg => $self->{mouse}->{bits},
 		     drag => 'start');
 	  }
@@ -334,7 +334,7 @@ sub event_loop {
 		     state => $self->{mouse}->{drag_state},
 		     event => $self->{mouse}->{target},
 		     press => $self->{mouse}->{press},
-		     xevent => \%event,
+		     xevent => {%event},
 		     arg => $self->{mouse}->{bits},
 		     drag => 'move');
 	  }
@@ -359,7 +359,7 @@ sub event_loop {
 	  next unless $id = $event{$field};
 	  if ($meta eq 'global') {
 	    next unless $target = $self->{event}->{global}->{$name};
-	    ($window, $value) = (undef, 'global');
+	    ($window, $value) = ($id, 'global');
 	  }
 	  else {
 	    $window = $self->{window}->{$id};
@@ -367,7 +367,7 @@ sub event_loop {
 	    next unless $target = $self->{event}->{$meta}->{$value}->{$name};
 	  }
 	  next unless (!defined($arg)) || ($target = $target->{$arg});
-	  @event{qw(meta value window)} = ($meta, $value, $window);
+	  @event{qw(meta value window x)} = ($meta, $value, $window, $self);
 	  next event if &{$target->{sub}}(@{$target->{arg}}, \%event);
 	}
       }
