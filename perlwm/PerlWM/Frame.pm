@@ -74,6 +74,7 @@ sub new {
     (x => $self->{x},
      padding => 2,
      value => $self->{client}->{prop}->{WM_NAME});
+  $self->{name} = $self->{client}->{prop}->{WM_NAME};
 
   $self->{label}->create(parent => $self,
 			 x => 2, y => 2,
@@ -160,7 +161,7 @@ sub configure {
   if (%arg) {
     $self->ConfigureWindow(%frame);
     $self->geom(%frame);
-    $self->{label}->ConfigureWindow(width => $frame{width} - 4) 
+    $self->{label}->ConfigureWindow(width => $frame{width} - 4)
       if $frame{width};
     $size ||= $self->size();
     my %event = ( name => 'ConfigureNotify',
@@ -348,6 +349,7 @@ sub prop_wm_name {
     $self->{icon}->name($name);
   }
   $self->{label}->{value} = $name;
+  $self->{name} = $name;
 }
 
 ############################################################################
@@ -361,8 +363,8 @@ sub find_frame {
   for (my $index = 0; $index < $nframes; $index++) {
     if ($frames->[$index] == $self) {
       $index += $offset;
-      $offset += $nframes if $index < 0;
-      $offset -= $nframes if $index > $nframes;
+      $index += $nframes if $index < 0;
+      $index -= $nframes if $index >= $nframes;
       return $frames->[$index];
     }
   }
@@ -385,6 +387,7 @@ sub warp_to {
 
 action_register('keyboard_move', 'PerlWM::Action::Move');
 action_register('keyboard_resize', 'PerlWM::Action::Resize');
+action_register('keyboard_search', 'PerlWM::Action::Search');
 
 sub EVENT { ( __PACKAGE__->SUPER::EVENT,
 
@@ -409,6 +412,8 @@ sub EVENT { ( __PACKAGE__->SUPER::EVENT,
 
 	      'Key(Mod4 Left)' => action('focus_previous'),
 	      'Key(Mod4 Right)' => action('focus_next'),
+
+	      'Key(Mod4 s)' => action('keyboard_search'),
 
 	      # TODO: config for focus policy
 	      'Enter' => \&enter,
