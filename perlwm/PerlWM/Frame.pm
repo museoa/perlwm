@@ -373,9 +373,7 @@ sub warp_to {
   for (0, 1) { 
     $position->[$_] += $size->[$_] if $position->[$_] < 0;
   }
-  $self->{x}->WarpPointer($self->{perlwm}->{id}, $self->{id},
-			  0, 0, 0, 0,
-			  @{$position});
+  $self->{x}->WarpPointer('None', $self->{id}, 0, 0, 0, 0, @{$position});
 }
 
 ############################################################################
