@@ -205,7 +205,8 @@ sub FIRSTKEY {
   unless (exists $self->{cached_list}) {
     $self->{cached_list} = [$self->{x}->ListProperties($self->{id})];
   }
-  $self->{list} = $self->{cached_list};
+  $self->{list} = [@{$self->{cached_list}}];
+  return undef unless @{$self->{list}};
   return $self->{x}->atom_name(shift @{$self->{list}});
 }
 
