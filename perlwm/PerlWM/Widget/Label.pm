@@ -35,6 +35,7 @@ sub new {
 
   $self->{gc} = $self->{x}->gc_get('widget');
   $self->{ascent} = $self->{x}->font_info('widget_font')->{font_ascent};
+  $self->{descent} = $self->{x}->font_info('widget_font')->{font_descent};
   $self->{font} = $self->{x}->font_get('widget_font');
 
   return $self;
@@ -48,6 +49,7 @@ sub onValueChange {
     $self->{frozen}++;
   }
   else {
+    $self->resize() if $self->{resize};
     $self->ClearArea(0, 0, 0, 0);
     $self->draw($value);
   }
@@ -73,8 +75,24 @@ sub onExpose {
 
 sub create {
   my($self, %args) = @_;
+  if ($args{width} eq 'auto') {
+    $args{width} = $self->{x}->font_text_width('widget_font', $self->{value});
+    $args{width} += (2 * $self->{padding}) if $self->{padding};
+  }
+  if ($args{height} eq 'auto') {
+    $args{height} = $self->{ascent} + $self->{descent};
+    $args{height} += (2 * $self->{padding}) if $self->{padding};
+  }
   $args{background_pixel} ||= $self->{x}->color_get('widget_background');
   return $self->SUPER::create(%args);
+}
+
+############################################################################
+
+sub resize {
+  my($self) = @_;
+  my $width = $self->{x}->font_text_width('widget_font', $self->{value});
+  $self->ConfigureWindow(width => $width + ($self->{padding} * 2));
 }
 
 ############################################################################
