@@ -16,11 +16,13 @@ use PerlWM::Frame;
 
 sub new {
 
-  my($proto, %args) = @_;
+  my($proto, %arg) = @_;
   my $class = ref($proto) || $proto || __PACKAGE__;
-  my $self = $class->SUPER::new(%args);
+  my $self = $class->SUPER::new(%arg);
 
   $self->{frame} = PerlWM::Frame->new(x => $self->{x}, client => $self);
+
+  $self->MapWindow() if $arg{map_request};
 
   return $self;
 }
