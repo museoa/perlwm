@@ -41,7 +41,8 @@ my %EVENT_TO_ARG = (Property => 'atom');
 my %EVENT_TRACE = (PropertyNotify => [qw(window atom)],
 		   ConfigureRequest => [qw(window)],
 		   DestroyNotify => [qw(event window)],
-		   EnterNotify => [qw(event child detail)]);
+		   EnterNotify => [qw(event child detail mode)],
+		   LeaveNotify => [qw(event child detail mode)]);
 
 ############################################################################
 
@@ -218,7 +219,7 @@ sub event_trace {
 
   return unless $self->{debug};
 
-  if (my $t = $EVENT_TRACE{$e->{name}} || []) {
+  if (my $t = $EVENT_TRACE{$e->{name}}) {
     my @a = map { 
       if ($_ eq 'atom') {
 	"$_:".$self->atom_name($e->{$_});
