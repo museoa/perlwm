@@ -38,17 +38,14 @@ sub perlwm {
        $frame->ConfigureWindow(stack_mode => 'Above');
      });
 
-  $self->{x}->event_add_class
-    ('PerlWM::Frame', 'Leave', undef,
-     sub { 
-       my($event) = @_;
-       my $frame = $event->{window};
-       return if $event->{detail} eq 'Inferior';
-       $frame->ConfigureWindow(stack_mode => 'Below');
-    });
-
   $self->{x}->event_add_class('PerlWM::Frame', 'Drag', 'Button1', \&move_opaque);
   $self->{x}->event_add_class('PerlWM::Client', 'Drag', 'Mod1 Button1', \&move_opaque);
+  
+  $self->{x}->event_add_class('PerlWM::Frame', 'Click', 'Button2', \&lower_window);
+  $self->{x}->event_add_class('PerlWM::Client', 'Click', 'Mod1 Button2', \&lower_window);
+
+  $self->{x}->event_add_class('PerlWM::Frame', 'Drag', 'Button3', \&size_drag);
+  $self->{x}->event_add_class('PerlWM::Client', 'Drag', 'Mod1 Button3', \&size_drag);
   
   $self->init_wm();
 
@@ -116,6 +113,71 @@ sub move_opaque {
   }
   $frame->ConfigureWindow(x => $state->{offset_x} + $event->{root_x}, 
 			  y => $state->{offset_y} + $event->{root_y});
+  return 1;
+}
+
+############################################################################
+
+sub size_drag {
+
+  #-------------------------------------------------------------
+  my($event) = @_;
+  my($frame, $client);
+  if ($event->{window}->isa('PerlWM::Frame')) {
+    $frame = $event->{window};
+    $client = $frame->{client};
+  }
+  elsif ($event->{window}->isa('PerlWM::Client')) {
+    $client = $event->{window};
+    $frame = $client->{frame};
+  }
+  my $state = $event->{state};
+  #-------------------------------------------------------------
+  if ($event->{drag} eq 'start') {
+    my %geom = $frame->GetGeometry($frame);
+    $state->{frame_orig_geom} = \%geom;
+    my %geom = $client->GetGeometry($client);
+    $state->{client_orig_geom} = \%geom;
+    $state->{start_x} =  - $event->{root_x};
+    $state->{start_y} =  - $event->{root_y};
+  }
+  #-------------------------------------------------------------
+  if ( ( ( $state->{start_x} + $event->{root_x} ) != 0 )  ||
+       ( ( $state->{start_y} + $event->{root_y} ) != 0 ) ) {
+    #------------------------------------------
+    my $inc_x=$event->{root_x} +  $state->{start_x} ;
+    my $inc_y=$event->{root_y} +  $state->{start_y} ;
+    #------------------------
+    $frame->ConfigureWindow(
+			    width => $state->{frame_orig_geom}->{width}  + $inc_x ,
+			    height => $state->{frame_orig_geom}->{height}  + $inc_y ) ;
+    #------------------------
+    $client->ConfigureWindow(
+			     width => $state->{client_orig_geom}->{width}  + $inc_x ,
+			     height => $state->{client_orig_geom}->{height}  + $inc_y ) ;
+    #------------------------------------------
+  }
+  return 1;
+  #-------------------------------------------------------------
+}
+
+############################################################################
+
+sub lower_window {
+
+  my($event) = @_;
+  my($frame, $client);
+  #------------------------------------------
+  if ($event->{window}->isa('PerlWM::Frame')) {
+    $frame = $event->{window};
+    $client = $frame->{client};
+  }
+  elsif ($event->{window}->isa('PerlWM::Client')) {
+    $client = $event->{window};
+    $frame = $client->{frame};
+  }
+  #------------------------------------------
+  $frame->ConfigureWindow(stack_mode => 'Below');
   return 1;
 }
 
