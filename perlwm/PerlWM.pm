@@ -91,8 +91,27 @@ sub configure_request {
 
 ############################################################################
 
+sub sloppy_focus_enter {
+
+  my($self, $event) = @_;
+  $self->{sloppy_focus}->enter() if $self->{sloppy_focus};
+}
+
+############################################################################
+
+sub sloppy_focus_leave {
+
+  my($self, $event) = @_;
+  $self->{sloppy_focus}->leave() if $self->{sloppy_focus};
+}
+
+############################################################################
+
 sub EVENT { ( MapRequest => \&map_request,
 	      ConfigureRequest => \&configure_request,
+
+	      'Enter' => \&sloppy_focus_enter,
+	      'Leave' => \&sloppy_focus_leave,
 
 	      'Key(Mod4 s)' => action('keyboard_search') ) }
 
