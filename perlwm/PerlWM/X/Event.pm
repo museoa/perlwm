@@ -47,10 +47,15 @@ my %ALL_BITS = (%MOD_BITS, %BUT_BITS, %NUM_BITS);
 my %RALL_BITS = reverse %ALL_BITS;
 
 my %EVENT_TO_XMASK = (Enter => 'EnterWindow',
-		      Leave => 'LeaveWindow');
+		      Leave => 'LeaveWindow',
+		      Expose => 'Exposure',
+		      Property => 'PropertyChange');
 
 my %XEVENT_TO_EVENT = (EnterNotify => 'Enter',
-		       LeaveNotify => 'Leave');
+		       LeaveNotify => 'Leave',
+		       PropertyNotify => 'Property');
+
+my %EVENT_TO_ARG = (Property => 'atom');
 
 ############################################################################
 
@@ -69,6 +74,8 @@ sub event_init {
   $self->{timer} = [];
 
   $self->{mouse} = { clicks => 0, click_count => 0, drag => 0 };
+
+  $self->event_handler('queue');
 }
 
 ############################################################################
@@ -119,15 +126,24 @@ sub event_handler_parse {
   $handler = { sub => $handler } if ref $handler eq 'CODE';
   $handler->{arg} ||= [];
 
+  # look for event arguments
   my $arg;
   if ($event =~ s/\(([^\)]*)\)$//) {
     $arg = $1;
   }
+  
+  # flatten event argument
   if ($event =~ $MOUSE_EVENT) {
-    my $button = $self->event_button_pack(split /\s+/, $arg);
-    $hash->{$event}->{$button} = $handler;
+    # pack buttons and modifiers
+    $arg = $self->event_button_pack(split /\s+/, $arg);
   }
-  elsif ($arg) {
+  elsif ($event eq 'Property') {
+    # atomise property name
+    $arg = $self->atom($arg);
+  }
+
+  # add to event table
+  if ($arg) {
     $hash->{$event}->{$arg} = $handler;
   }
   else {
@@ -227,11 +243,12 @@ sub event_window_hook {
 
   die "not a window\n" unless $window->isa('PerlWM::X::Window');
 
-  return unless $self->{event_loop_started};
+  return if $window->{no_events};
 
   $grab ||= $self->alien($window->{id});
 
   my $mask = $window->{extra_event_mask} || 0;
+  my $button_mask = 0;
 
   foreach my $event ($self->{event}->{window}->{$window->{id}},
 		     $self->event_window_hook_list($window),
@@ -239,11 +256,11 @@ sub event_window_hook {
 		     $self->{event}->{global}) {
     while (my($k, $v) = each %{$event}) {
       if ($k =~ $MOUSE_EVENT) {
-	$mask |= $self->pack_event_mask(qw(ButtonPress ButtonRelease));
+	$button_mask |= $self->pack_event_mask(qw(ButtonPress ButtonRelease));
 	if ($k eq 'Drag') {
 	  foreach (keys %{$v}) {
 	    if (my $button = $RALL_BITS{$_ & $BUT_MASK}) {
-	      $mask |= $self->pack_event_mask("${button}Motion");
+	      $button_mask |= $self->pack_event_mask("${button}Motion");
 	    }
 	  }
 	}
@@ -251,7 +268,7 @@ sub event_window_hook {
 	  foreach (keys %{$v}) {
 	    if (my $button = $RALL_BITS{$_ & $BUT_MASK}) {
 	      $self->GrabButton($_ & $MOD_MASK, $button, 
-				$window->{id}, 1, $mask,
+				$window->{id}, 1, $button_mask,
 				'Asynchronous', 'Asynchronous', 
 				'None', 'None')
 	    }
@@ -264,8 +281,8 @@ sub event_window_hook {
     }
   }
 
-  $self->ChangeWindowAttributes($window->{id}, event_mask => $mask)
-    unless $grab;
+  $mask |= $button_mask unless $grab;
+  $self->ChangeWindowAttributes($window->{id}, event_mask => $mask);
 }
 
 ############################################################################
@@ -292,9 +309,8 @@ sub event_loop {
   my $stime = $hires ? &{$hires}() : time();
 
   $self->{event_loop_started} = 1;
-  $self->event_hook_all();
+  #$self->event_hook_all();
 
-  $self->event_handler('queue');
   my($bits, $time, $adjust, %event) = ('');
   vec($bits, fileno($self->{connection}->fh()), 1) = 1;
  event:
@@ -304,7 +320,7 @@ sub event_loop {
 	# timer has already expired
 	shift @{$self->{timer}};
 	# fake an event
-	%event = ( name => 'Timer', data => $timer->[1] );
+	%event = ( name => 'Timer', arg => $timer->[1], event => 1 );
 	# no adjustment
 	$adjust = 0;
       }
@@ -326,7 +342,7 @@ sub event_loop {
 	  # timeout - drop the timer
 	  shift @{$self->{timer}};
 	  # fake an event
-	  %event = ( name => 'Timer', data => $timer->[1] );
+	  %event = ( name => 'Timer', arg => $timer->[1], event => 1 );
 	  # adjust by timer value if we don't have have time::hires
 	  $adjust = $timer->[0];
 	}
@@ -343,9 +359,9 @@ sub event_loop {
       $time = $event{time} if $event{time} && !$hires;
       # deal with mouse events
       if (($event{name} =~ $X_MOUSE_EVENT) || 
-	  (($event{name} eq 'Timer') && ($event{data} eq $self->{mouse}))) {
+	  (($event{name} eq 'Timer') && ($event{arg} eq $self->{mouse}))) {
 	my %fire;
-#	printf("%8.4f $event{name} $event{data}\n", 
+#	printf("%8.4f $event{name} $event{arg}\n", 
 #	       ($hires ? &{$hires}() : time()) - $stime);
 	if ($event{name} eq 'ButtonRelease') {
 	  if ($self->{mouse}->{drag} > $DRAG_THRESHOLD) {
@@ -409,7 +425,18 @@ sub event_loop {
       }
       else {
 	# other event - map the name
+	$event{xevent} = {%event};
 	$event{name} = $XEVENT_TO_EVENT{$event{name}} || $event{name};
+	if (my $arg = $EVENT_TO_ARG{$event{name}}) {
+	  $event{arg} = $event{xevent}->{$arg};
+	}
+	# special case to flush the window property cache
+	if ($event{name} eq 'Property') {
+	  if (my $window = $self->{window}->{$event{window}}) {
+	    my $name = $self->atom_name($event{atom});
+	    $window->{prop}->{"CACHE:$name"} = $event{state};
+	  }
+	}
       }
       # dispatch the event
       my($id, $window, $target);
