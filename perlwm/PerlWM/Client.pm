@@ -24,12 +24,10 @@ sub new {
   # we want some events, but not the input ones which are listed
   # in our event map, because those will be grabbed by the frame
   my $mask = $self->event_mask();
-  $mask &= ~$self->pack_event_mask(qw(KeyPress KeyRelease
-				      ButtonPress ButtonRelease),
-				   map "Button${_}Motion", (1..5));
-
-  $self->ChangeWindowAttributes(id => $self->{id},
-				event_mask => $mask);
+  $mask &= ~($self->{x}->pack_event_mask(qw(KeyPress KeyRelease
+					    ButtonPress ButtonRelease),
+					 map "Button${_}Motion", (1..5)));
+  $self->ChangeWindowAttributes(id => $self->{id}, event_mask => $mask);
 
   return $self;
 }
