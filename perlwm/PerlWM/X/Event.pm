@@ -158,17 +158,20 @@ sub event_handler_parse {
     $arg = $1;
   }
 
-  # flatten event argument
-  if ($event =~ $MOUSE_EVENT) {
-    # pack buttons and modifiers
-    $arg = $self->event_button_pack(split /\s+/, $arg);
-  }
-  elsif ($event eq 'Property') {
-    # atomise property name
-    $arg = $self->atom($arg);
-  }
-  elsif ($event eq 'Key') {
-    $arg = $self->event_key_pack(split /\s+/, $arg);
+  if ($arg && ($arg ne 'Any')) {
+    # flatten event argument
+    if ($event =~ $MOUSE_EVENT) {
+      # pack buttons and modifiers
+      $arg = $self->event_button_pack(split /\s+/, $arg);
+    }
+    elsif ($event eq 'Property') {
+      # atomise property name
+      $arg = $self->atom($arg);
+    }
+    elsif ($event eq 'Key') {
+      # pack keys and modifiers
+      $arg = $self->event_key_pack(split /\s+/, $arg);
+    }
   }
 
   # add to event table
@@ -238,6 +241,7 @@ sub event_window_mask {
       elsif ($k eq 'Key') {
 	$mask |= $self->pack_event_mask(qw(KeyPress));
 	foreach (keys %{$v}) {
+	  next if $_ eq 'Any';
 	  my $h = sprintf("K%08x", ($_ & ($MOD_MASK | $KEY_MASK)));
 	  $grab{$h} = { type => 'Key', 
 			mods => ($_ & $MOD_MASK),
@@ -512,7 +516,9 @@ sub event_loop {
 	  $event{arg} = (($event{state} & $MOD_MASK) |
 			 ($event{detail} << $KEY_SHIFT));
 	  # put the keysym back
-	  $event{sym} = $self->key_code_to_sym($event{detail});
+	  my $offset = ($event{state} & ($MOD_BITS{Shift} |
+					 $MOD_BITS{Lock})) ? 1 : 0;
+	  $event{sym} = $self->key_code_to_sym($event{detail}, $offset);
 	  $event{string} = $self->key_sym_to_string($event{sym});
 	}
       }
@@ -527,7 +533,8 @@ sub event_loop {
 	  next unless defined $_;
 	  next unless $class = $self->event_class($_, !($_ == $window));
 	  next unless $method = $class->{$name};
-	  next unless ((!defined($arg)) || ($method = $method->{$arg}));
+	  next unless ((!defined($arg)) || ($method = ($method->{$arg} ||
+						       $method->{Any})));
 	  if ($method) {
 	    $target = $_;
 	    last;
