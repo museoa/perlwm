@@ -70,6 +70,11 @@ sub perlwm {
 							   map { exists $xe->{$_}?($_=>$xe->{$_}):() 
 							       } qw(x y width height 
 								    border_width sibling stack_mode));
+			       if (defined($xe->{width}) && defined($xe->{height}) && 
+				   defined($client->{frame})) {
+				     $client->{frame}->ConfigureWindow(width => $xe->{width} + 4,
+								       height => $xe->{height} + 4 + 20);
+			       }
 #			       $client->{x}->dumper($event);
 			     });
 
