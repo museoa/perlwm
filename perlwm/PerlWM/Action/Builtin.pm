@@ -85,7 +85,6 @@ sub raise_window {
   $window->ConfigureWindow(stack_mode => 'Above');
 }
 
-
 ############################################################################
 
 sub iconify_window {
@@ -100,6 +99,14 @@ sub deiconify_window {
 
   my($window, $event) = @_;
   $window->{frame}->deiconify();
+}
+
+############################################################################
+
+sub close_window {
+
+  my($window, $event) = @_;
+  $window->delete_or_destroy();
 }
 
 ############################################################################
