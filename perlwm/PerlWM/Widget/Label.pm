@@ -23,6 +23,7 @@ sub EVENT {
 ############################################################################
 
 sub new {
+
   my($proto, %arg) = @_;
   my $class = ref $proto || $proto || __PACKAGE__;
   my $self = $class->SUPER::new(%arg);
@@ -44,6 +45,7 @@ sub new {
 ############################################################################
 
 sub onValueChange {
+
   my($self, $value) = @_;
   if ($self->{frozen}) {
     $self->{frozen}++;
@@ -58,6 +60,7 @@ sub onValueChange {
 ############################################################################
 
 sub draw {
+
   my($self, $value) = @_;
   $self->PolyText8($self->{gc},
 		   $self->{padding}, $self->{padding} + $self->{ascent},
@@ -67,6 +70,7 @@ sub draw {
 ############################################################################
 
 sub onExpose { 
+
   my($self, $event) = @_;
   $self->draw($self->{value});
 }
@@ -74,6 +78,7 @@ sub onExpose {
 ############################################################################
 
 sub create {
+
   my($self, %args) = @_;
   if ($args{width} eq 'auto') {
     $args{width} = $self->{x}->font_text_width('widget_font', $self->{value});
@@ -90,6 +95,7 @@ sub create {
 ############################################################################
 
 sub resize {
+
   my($self) = @_;
   my $width = $self->{x}->font_text_width('widget_font', $self->{value});
   $self->ConfigureWindow(width => $width + ($self->{padding} * 2));

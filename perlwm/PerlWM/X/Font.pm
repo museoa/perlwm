@@ -53,6 +53,7 @@ sub font_info {
 ############################################################################
 
 sub font_text_width {
+
   my($self, $font, $string) = @_;
   my $info = $self->font_info($font);
   # TODO: handle multibyte fonts properly

@@ -135,6 +135,7 @@ my %OFFSETS =
 ############################################################################
 
 sub TIEHASH {
+
   my($class, $w) = @_;
   die unless $w->isa('PerlWM::X::Window');
   return bless { x => $w->{x}, id => $w->{id} }, $class;
@@ -143,6 +144,7 @@ sub TIEHASH {
 ############################################################################
 
 sub STORE {
+
   my($self, $key, $value) = @_;
   my($type, $format, $data) = $self->encode_property($key, $value);
   $self->{x}->ChangeProperty($self->{id},
@@ -156,6 +158,7 @@ sub STORE {
 ############################################################################
 
 sub FETCH {
+
   my($self, $key) = @_;
   return $self->{cache}->{$key} if exists $self->{cache}->{$key};
   my($data, $type, $format, $after, $value) = 
@@ -172,6 +175,7 @@ sub FETCH {
 ############################################################################
 
 sub FIRSTKEY {
+
   my($self) = @_;
   unless (exists $self->{cached_list}) {
     $self->{cached_list} = [$self->{x}->ListProperties($self->{id})];
@@ -184,6 +188,7 @@ sub FIRSTKEY {
 ############################################################################
 
 sub NEXTKEY {
+
   my($self, $lastkey) = @_;
   return undef unless @{$self->{list}};
   return $self->{x}->atom_name(shift @{$self->{list}});
@@ -192,6 +197,7 @@ sub NEXTKEY {
 ############################################################################
 
 sub EXISTS {
+
   my($self, $key) = @_;
   return 1 if exists $self->{cache}->{$key};
   my($data, $type, $format, $after) = 
@@ -205,6 +211,7 @@ sub EXISTS {
 ############################################################################
 
 sub DELETE {
+
   my($self, $key) = @_;
   if (exists $self->{cache}->{$key}) {
     $self->{x}->DeleteProperty($self->{id},
@@ -225,6 +232,7 @@ sub DELETE {
 ############################################################################
 
 sub CLEAR {
+
   my($self) = @_;
   $self->{cache} = {};
 }
@@ -232,6 +240,7 @@ sub CLEAR {
 ############################################################################
 
 sub flush_cache {
+
   my($self, $atom, $reason) = @_;
   my $name = $self->{x}->atom_name($atom);
   # clearing our cache (probably because of a property notify)
@@ -254,6 +263,7 @@ sub flush_cache {
 ############################################################################
 
 sub encode_property {
+
   my($self, $key, $value) = @_;
   use Carp qw(cluck); cluck "?";
   die "TODO: encode_property($key) - ".join(':',(caller())[1,2]);
@@ -262,6 +272,7 @@ sub encode_property {
 ############################################################################
 
 sub squash_list {
+
   my($one, @rest) = @_;
   return [$one, @rest] if @rest;
   return $one;

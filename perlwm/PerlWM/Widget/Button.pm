@@ -21,6 +21,7 @@ sub EVENT {
 ############################################################################
 
 sub onClick { 
+
   my($self, $event) = @_;
   if ($self->{action}) {
     $self->{action}->($self);

@@ -14,6 +14,7 @@ use base qw(PerlWM::X::Window);
 ############################################################################
 
 sub init {
+
   my($class, $x) = @_;
 
   $x->color_add('widget_background', 'black');
@@ -27,6 +28,7 @@ sub init {
 ############################################################################
 
 sub new {
+
   my($proto, @args) = @_;
   my $class = ref $proto || $proto || __PACKAGE__;
   my $self = $class->SUPER::new(@args);
@@ -37,6 +39,7 @@ sub new {
 ############################################################################
 
 sub freeze {
+
   my($self) = @_;
   $self->{frozen} = 1;
 }
@@ -44,6 +47,7 @@ sub freeze {
 ############################################################################
 
 sub unfreeze {
+
   my($self) = @_;
   if ($self->{frozen} > 1) {
     $self->redraw();
@@ -54,6 +58,7 @@ sub unfreeze {
 ############################################################################
 
 sub redraw {
+
   my($self) = @_;
   $self->ClearArea(0, 0, 0, 0, 1);
 }
