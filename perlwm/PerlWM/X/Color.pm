@@ -18,7 +18,7 @@ sub color_init {
   my $s = $self->{root_depth};
   my $v = $self->{visuals}->{$self->{root_visual}};
   my($rm, $gm, $bm) = @{$v}{qw(red_mask green_mask blue_mask)};
-  my($rs, $gs, $bs) = map { my($m, $r) = ($_, -$s);
+  my($rs, $gs, $bs) = map { my($m, $r) = ($_, -16);
 			    while ($m) {
 			      $r++;
 			      $m >>= 1;
@@ -67,6 +67,7 @@ sub color_create {
     warn "color_to_pixel: failed for '$spec' (@rgb)\n";
     $pixel = $self->{white_pixel};
   }
+
   return ($pixel, \@rgb);
 }
 
