@@ -265,8 +265,25 @@ sub flush_cache {
 sub encode_property {
 
   my($self, $key, $value) = @_;
-  use Carp qw(cluck); cluck "?";
-  die "TODO: encode_property($key) - ".join(':',(caller())[1,2]);
+  my($type, $format, $data);
+  if ((ref($value) eq 'HASH') && 
+      exists($value->{type}) && 
+      exists($value->{value})) {
+    $type = $value->{type};
+    $value = $value->{value};
+  }
+  if ($key eq 'WM_STATE') {
+    ($type, $format, $data) = 
+      ('WM_STATE', 32,
+       pack('L*', ($BITS{WM_STATE}->{$value->{state}} || 0, 
+		   $value->{icon} || 0)));
+  }
+  else {
+    use Carp qw(cluck); cluck "?";
+    die "TODO: encode_property($key) - ".join(':',(caller())[1,2]);
+  }
+  $type = $self->{x}->atom($type);
+  return ($type, $format, $data);
 }
 
 ############################################################################

@@ -47,6 +47,8 @@ sub new {
 
   $self->{client}->event_overlay_add($self);
 
+  $self->{client}->{prop}->{WM_STATE} = { state => 'Normal' };
+
   $self->{x}->ChangeSaveSet('Insert', $self->{client_id});
 
   my %geom = $self->{client}->GetGeometry();
@@ -297,6 +299,8 @@ sub iconify {
   my($self) = @_;
   $self->{icon} ||= PerlWM::Icon->new(x => $self->{x}, frame => $self);
   $self->{icon}->MapWindow();
+  $self->{client}->{prop}->{WM_STATE} = { state => 'Iconic',
+					  icon => $self->{icon}->{id} };
   $self->UnmapWindow();
 }
 
@@ -307,6 +311,7 @@ sub deiconify {
   my($self) = @_;
   $self->MapWindow();
   $self->{icon}->UnmapWindow();
+  $self->{client}->{prop}->{WM_STATE} = { state => 'Normal' };
 }
 
 ############################################################################
