@@ -60,7 +60,8 @@ sub position {
     $geom{x} += $fgeom{x};
     $geom{y} += $fgeom{y};
   }
-  return [$geom{x}, $geom{y}];
+  $self->{cached_position} = [$geom{x}, $geom{y}];
+  return $self->{cached_position};
 }
 
 ############################################################################
@@ -69,7 +70,8 @@ sub size {
 
   my($self) = @_;
   my %geom = $self->GetGeometry();
-  return [$geom{width}, $geom{height}];
+  $self->{cached_size} = [$geom{width}, $geom{height}];
+  return $self->{cached_size};
 }
 
 ############################################################################
@@ -79,11 +81,23 @@ sub configure {
   my($self, %arg) = @_;
 
   $self->check_size($arg{size}) if $arg{size};
-
   if ($self->{frame}) {
     $self->{frame}->configure(%arg);
-    delete $arg{position};
+    my $position = delete $arg{position};
     delete $arg{stack_mode};
+    # tell the client (otherwise things like menus break)
+    $self->size() unless $self->{cached_size};
+    my %event = ( name => 'ConfigureNotify',
+		  window => $self->{id},
+		  event => $self->{id},
+		  x => 2 + $position->[0],
+		  y => 2 + 20 + $position->[1],
+		  width => $self->{cached_size}->[0],
+		  height => $self->{cached_size}->[1],
+		  border_width => 0,
+		  above_sibling => $self->{frame}->{id},
+		  override_redirect => 0 );
+    $self->SendEvent(0, 'StructureNotify', $self->{x}->pack_event(%event));
   }
   if (my $size = delete $arg{size}) {
     $arg{width} = $size->[0];
