@@ -26,8 +26,11 @@ BEGIN {
   my $frame = PerlWM::Config->new('default/search/frame');
   $frame->set(match => '#8080ff',
 	      select => '#00ff00',
-	      nomatch => '#ffffff',
-	      focus => '#ff0000');
+	      nomatch => '#ffffff');
+  my $icon = PerlWM::Config->new('default/search/icon');
+  $icon->set(match => '#8080ff',
+	     select => '#00ff00',
+	     nomatch => '#ffffff');
 };
 
 ############################################################################
@@ -57,13 +60,17 @@ sub start {
 sub highlight_frame {
 
   my($self, $frame, $type, $itype) = @_;
-  return unless my $color = $self->{x}->color_get("search/frame/$type");
+  my $color = (($type eq 'reset') ? "frame/blur" : 
+	       ($type eq 'focus') ? "frame/focus" : "search/frame/$type");
   $itype ||= $type;
-  return unless my $icolor = $self->{x}->color_get("search/frame/$itype");
-  $frame->ChangeWindowAttributes(background_pixel => $color);
+  my $icolor = ($itype eq 'reset') ? "icon/border_color" : "search/icon/$itype";
+  return unless $color && $icolor;
+  $frame->ChangeWindowAttributes(background_pixel => 
+				 $self->{x}->color_get($color));
   $frame->ClearArea();
   if ($frame->{icon}) {
-    $frame->{icon}->ChangeWindowAttributes(background_pixel => $icolor);
+    $frame->{icon}->ChangeWindowAttributes(background_pixel => 
+					   $self->{x}->color_get($icolor));
     $frame->{icon}->ClearArea();
   }
 }
@@ -73,7 +80,7 @@ sub highlight_frame {
 sub finish {
 
   my($self) = @_;
-  $self->highlight_frame($_, 'nomatch') for @{$self->{frames}};
+  $self->highlight_frame($_, 'reset') for @{$self->{frames}};
   $self->{popup}->UnmapWindow();
   $self->{popup}->DestroyWindow();
   $self->SUPER::finish();
@@ -173,7 +180,7 @@ sub enter {
   if (my $select = $self->{match}->[$self->{select}]) {
     $select->deiconify();
     $select->ConfigureWindow(stack_mode => 'Above');
-    $self->highlight_frame($select, 'focus', 'nomatch');
+    $self->highlight_frame($select, 'focus', 'reset');
     $select->warp_to([-10, 10]);
     $select->enter();
   }
@@ -226,7 +233,7 @@ sub new {
   $self->{row_height} = (($self->{ascent} + $self->{descent}) + 
 			 (2 * $self->{padding}));
 
-  $self->{rows_max} = 10;
+  $self->{rows_max} = 50;
 
   $self->{rows} = 0;
 
