@@ -85,8 +85,12 @@ sub configure {
     $self->{frame}->configure(%arg);
     my $position = delete $arg{position};
     delete $arg{stack_mode};
-    # tell the client (otherwise things like menus break)
-    $self->size() unless $self->{cached_size};
+    if ($arg{size}) {
+      $self->{cached_size} = $arg{size};
+    }
+    elsif (!$self->{cached_size}) {
+      $self->size();
+    }
     my %event = ( name => 'ConfigureNotify',
 		  window => $self->{id},
 		  event => $self->{id},
