@@ -107,16 +107,20 @@ sub image_xpm_load {
   $_ = $self->color_get(undef, $_) for values %{$xpm->{colors}};
 
   my $depth = $self->{root_depth};
-
   my $pad = $self->{pixmap_formats}->{$depth}->{scanline_pad} / 8;
-  # TODO: different depths / bits_per_pixel
-  my $scanline = ($xpm->{width} * 2);
+  my $bpp = $self->{pixmap_formats}->{$depth}->{bits_per_pixel};
+  my $bypp = $bpp / 8;
+  
+  # TODO: deal with 1,4 and 8 bpp
+  die "can't cope with <= 8 bpp, sorry" if $bpp <= 8;
+  my $scanline = ($xpm->{width} * ($bpp / 8));
   if (my $odd = $scanline % $pad) {
     $pad = ($pad - $odd);
   }
   else {
     $pad = 0;
   }
+  $pad = '\0' x $pad;
 
   my $y = 0;
   my $height = 0;
@@ -124,14 +128,20 @@ sub image_xpm_load {
 
   my $gc = $self->gc_get('default');
 
+  die "sorry, wrong bit/byte order" 
+    if $self->{image_byte_order} || $self->{bitmap_bit_order};
+
   my $raw;
   foreach my $row (@{$xpm->{pixels}}) {
     my @data;
     for (my $c = 0; $c < ($xpm->{cpp} * $xpm->{width}); $c += $xpm->{cpp}) {
-      push @data, $xpm->{colors}->{substr($row, $c, $xpm->{cpp})};
+      my $pixel = $xpm->{colors}->{substr($row, $c, $xpm->{cpp})};
+      for (1..$bypp) {
+	$raw .= chr($pixel & 0xff);
+	$pixel >>= 8;
+      }
     }
-    # TODO: different depths / endians
-    $raw .= pack("s*x$pad", @data);
+    $raw .= $pad;
     $height++;
     if (length($raw) > $max) {
       $self->PutImage($pixmap, $gc, $self->{root_depth},
@@ -140,6 +150,7 @@ sub image_xpm_load {
       $y += $height;
       $height = 0;
       $raw = "";
+      last;
     }
   }
   
