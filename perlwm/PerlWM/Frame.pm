@@ -168,6 +168,7 @@ sub enter {
   my($self, $event) = @_;
   return unless my $client = $self->{client};
   return if $event->{detail} eq 'Inferior';
+  return if $event->{mode} eq 'Grab';
   return if $self->{perlwm}->{focus} == $self;
 
   $client->SetInputFocus('None', 'CurrentTime');
@@ -184,6 +185,7 @@ sub leave {
   my($self, $event) = @_;
   return unless my $client = $self->{client};
   return if $event->{detail} eq 'Inferior';
+  return unless $event->{mode} eq 'Normal';
   return unless $self->{perlwm}->{focus} == $self;
 
   $self->{x}->SetInputFocus('None', 'None', 'CurrentTime');
