@@ -52,5 +52,33 @@ sub font_info {
 
 ############################################################################
 
+sub font_text_width {
+  my($self, $font, $string) = @_;
+  my $info = $self->font_info($font);
+  # TODO: handle multibyte fonts properly
+  die "can't deal with a font like that yet\n"
+    unless ($info->{min_byte1} == 0) && ($info->{max_byte1} == 0);
+  # this might be a bad idea!
+  $info->{size_cache} ||= { };
+  my $cache = $info->{size_cache};
+  # this might be even worse!
+  my @words = split / /, $string;
+  my $width = $info->{char_infos}->[ord(' ') - $info->{min_char_or_byte2}]->[2];
+  $width *= scalar @words;
+  foreach (@words) {
+    my $word_width = $cache->{$_};
+    unless (defined($word_width)) {
+      foreach (split //, $_) {
+	$word_width += $info->{char_infos}->[ord($_) - $info->{min_char_or_byte2}]->[2];
+      }
+      $cache->{$_} = $word_width;
+    }
+    $width += $word_width;
+  }
+  return $width;
+}
+
+############################################################################
+
 1;
 
