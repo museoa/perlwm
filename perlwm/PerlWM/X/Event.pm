@@ -272,6 +272,7 @@ sub event_window_hook {
 	if ($grab) {
 	  foreach (keys %{$v}) {
 	    if (my $button = $RALL_BITS{$_ & $BUT_MASK}) {
+	      $button =~ s/^Button//;
 	      $self->GrabButton($_ & $MOD_MASK, $button, 
 				$window->{id}, 1, $button_mask,
 				'Asynchronous', 'Asynchronous', 
