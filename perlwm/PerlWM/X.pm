@@ -170,4 +170,48 @@ sub dumper {
 
 ############################################################################
 
+# We tweak X11::Protocol here slightly - to use sysread, not read, so we 
+# can then use select. This shouldn't really hurt performance too badly, 
+# since X11::Protocol reads everything fairly efficiently. This is just a
+# copy of the function we need to change.
+
+use X11::Protocol::Connection::Socket;
+use X11::Protocol::Connection::FileHandle;
+
+package X11::Protocol::Connection::Socket;
+
+no warnings;
+
+sub get {
+  my($self) = shift;
+  my($len) = @_;
+  my($x, $n, $o) = ("", 0, 0);
+  my($sock) = $$self;
+  until ($o == $len) {
+    $n = $sock->sysread($x, $len - $o, $o);
+    croak $! unless defined $n;
+    $o += $n;
+  }
+  return $x;
+}
+
+package X11::Protocol::Connection::FileHandle;
+
+no warnings;
+
+sub get {
+  my($self) = shift;
+  my($len) = @_;
+  my($x, $n, $o) = ("", 0, 0);
+  my($fh) = $$self;
+  until ($o == $len) {
+    $n = read $fh, $x, $len - $o, $o;
+    croak $! unless defined $n;
+    $o += $n;
+  }
+  return $x;
+}
+
+############################################################################
+
 1;
