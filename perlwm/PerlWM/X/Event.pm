@@ -45,7 +45,7 @@ my %ALL_BITS = (%MOD_BITS, %BUT_BITS, %NUM_BITS);
 my %RALL_BITS = reverse %ALL_BITS;
 
 my %EVENT_TO_XMASK = (Enter => 'EnterWindow',
-		     Leave => 'LeaveWindow');
+		      Leave => 'LeaveWindow');
 
 my %XEVENT_TO_EVENT = (EnterNotify => 'Enter',
 		       LeaveNotify => 'Leave');
@@ -170,7 +170,7 @@ sub event_window_hook {
 
   $grab ||= $self->alien($window->{id});
 
-  my $mask = 0;
+  my $mask = $window->{extra_event_mask} || 0;
 
   foreach my $event ($self->{event}->{window}->{$window->{id}},
 		     $self->{event}->{class}->{ref $window},

@@ -46,7 +46,11 @@ sub perlwm {
 
   $self->{x}->event_add_class('PerlWM::Frame', 'Drag', 'Button3', \&size_drag);
   $self->{x}->event_add_class('PerlWM::Client', 'Drag', 'Mod1 Button3', \&size_drag);
-  
+
+  $self->{x}->event_add_class('PerlWM::Frame', 'DestroyNotify', undef, \&destroy_notify);
+  $self->{x}->event_add_class('PerlWM::Frame', 'MapNotify', undef, \&map_notify);
+  $self->{x}->event_add_class('PerlWM::Frame', 'UnmapNotify', undef, \&unmap_notify);
+
   $self->{x}->event_add_global('MapRequest', undef, 
 			       { sub => sub {
 				   my($self, $event) = @_;
@@ -195,4 +199,30 @@ sub lower_window {
 
 ############################################################################
 
+sub destroy_notify {
+
+  my($event) = @_;
+  return unless ref $event->{window};
+  $event->{window}->DestroyWindow();
+}
+
+############################################################################
+
+sub map_notify {
+
+  my($event) = @_;
+  return unless ref $event->{window};
+  $event->{window}->MapWindow();
+}
+
+############################################################################
+
+sub unmap_notify {
+
+  my($event) = @_;
+  return unless ref $event->{window};
+  $event->{window}->UnmapWindow();
+}
+
+############################################################################
 1;
