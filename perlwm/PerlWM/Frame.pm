@@ -120,6 +120,7 @@ sub size {
 
   my($self) = @_;
   my $size = $self->geom()->{size};
+  print "size / @{$size}\n";
   $size->[0] -= 4;
   $size->[1] -= 4 + 20;
   return $size;
@@ -131,27 +132,34 @@ sub configure {
 
   my($self, %arg) = @_;
 
-  my($size, $position) = delete @arg{qw(size position)};
+  my(%frame, %client);
+  my($size, $position) = @arg{qw(size position)};
   if ($size) {
-    $arg{width} = $size->[0] + 4;
-    $arg{height} = $size->[1] + 4 + 20;
+    $frame{width} = $size->[0] + 4;
+    $frame{height} = $size->[1] + 4 + 20;
+    $client{width} = $size->[0];
+    $client{height} = $size->[1];
   }
   if ($position) {
-    $arg{x} = $position->[0] - 2;
-    $arg{y} = $position->[1] - (2 + 20);
+    $frame{x} = $position->[0] - 2;
+    $frame{y} = $position->[1] - (2 + 20);
+    $client{x} = $position->[0];
+    $client{y} = $position->[1];
   }
+  # TODO: move this - make configure just size/position?
   if (%arg) {
-    $self->ConfigureWindow(%arg);
-    delete $arg{stack_mode};
-    $self->geom(%arg);
-    $self->{label}->ConfigureWindow(width => $arg{width} - 4) if $arg{width};
-    my($x, $y) = delete @arg{qw(x y)};
-    $size = $self->geom()->{size};
+    print "frame size = $frame{width} $frame{height}\n" if $arg{size};
+    $self->ConfigureWindow(%frame);
+    $self->geom(%frame);
+    $self->{label}->ConfigureWindow(width => $frame{width} - 4) 
+      if $frame{width};
+    $size ||= $self->geom()->{size};
+    print "size = @{$size}\n"; 
     my %event = ( name => 'ConfigureNotify',
 		  window => $self->{client}->{id},
 		  event => $self->{client}->{id},
-		  x => $x,
-		  y => $y,
+		  x => $client{x},
+		  y => $client{y},
 		  width => $size->[0],
 		  height => $size->[1],
 		  border_width => 0,
@@ -159,8 +167,9 @@ sub configure {
 		  override_redirect => 0 );
     $self->{client}->SendEvent(0, 'StructureNotify', 
 			       $self->{x}->pack_event(%event));
+    print "configuring client @{$size}\n" if $arg{size};
     $self->{client}->ConfigureWindow(width => $size->[0],
-				     height => $size->[1]) if $size;
+				     height => $size->[1]) if $arg{size};
   }
 }
 
@@ -169,6 +178,7 @@ sub configure {
 sub configure_request {
 
   my($self, $event) = @_;
+  print "configure_request\n";
   my $xe = $event->{xevent};
   $self->{x}->ConfigureWindow($xe->{window},
 			      map { exists $xe->{$_}?($_=>$xe->{$_}):()
