@@ -2,4 +2,4 @@
 
 use PerlWM;
 
-perlwm();
+PerlWM->new();
