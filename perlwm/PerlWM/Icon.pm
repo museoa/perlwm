@@ -15,6 +15,17 @@ use PerlWM::Widget::Label;
 
 ############################################################################
 
+BEGIN {
+  my $config = PerlWM::Config->new('default/icon');
+  $config->set('background' => '#000000',
+	       'foreground' => '#ffffff',
+	       'border_color' => '#ffffff',
+	       'border_width' => 2,
+	       'font' => '-b&h-lucida-medium-r-normal-*-*-100-*-*-p-*-iso8859-1');
+};
+
+############################################################################
+
 sub new {
 
   my($proto, %args) = @_;
@@ -26,27 +37,35 @@ sub new {
 
   my %geom = $self->{frame}->GetGeometry();
 
+  $self->{border_width} = PerlWM::Config->get('icon/border_width');
+
   $self->create(x => $geom{x},
 		y => $geom{y},
-		width => 4 + 50,
-		height => 4 + 18,
-		background_pixel => $self->{x}->{white_pixel});
+		width => ($self->{border_width} * 2) + 50,
+		height => ($self->{border_width} * 2) + 18,
+		background_pixel => $self->{x}->color_get('icon/border_color'));
 
-  $self->{label} = PerlWM::Widget::Label->new(x => $self->{x},
-					      padding => 2,
-					      resize => 'auto',
-					      value => $name);
+  $self->{label} = PerlWM::Widget::Label->new
+    (x => $self->{x},
+     padding => 2,
+     resize => 'auto',
+     foreground => 'icon/foreground',
+     background => 'icon/background',
+     font => 'icon/font',
+     value => $name);
 
   $self->{label}->create(parent => $self,
-			 x => 2, y => 2,
-			 width => 'auto', height => 'auto');
+			 x => $self->{border_width}, 
+			 y => $self->{border_width},
+			 width => 'auto', 
+			 height => 'auto');
   $self->{label}->MapWindow();
 
   $self->{frame}->{client}->event_overlay_add($self);
 
   %geom = $self->{label}->GetGeometry();
-  $self->ConfigureWindow(width => $geom{width} + 4, 
-			 height => $geom{height} + 4);
+  $self->ConfigureWindow(width => $geom{width} + ($self->{border_width} * 2), 
+			 height => $geom{height} + ($self->{border_width} * 2));
 
   return $self;
 }
@@ -59,8 +78,8 @@ sub name {
   $self->{label}->{value} = $name;
   $self->{label}->resize();
   my %geom = $self->{label}->GetGeometry();
-  $self->ConfigureWindow(width => $geom{width} + 4, 
-			 height => $geom{height} + 4);
+  $self->ConfigureWindow(width => $geom{width} + ($self->{border_width} * 2), 
+			 height => $geom{height} + ($self->{border_width} * 2));
 }
 
 ############################################################################
