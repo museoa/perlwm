@@ -14,11 +14,27 @@ use PerlWM::Widget::Label;
 
 ############################################################################
 
+my($FOCUS, $BLUR) = ([255, 0, 0], [255, 255, 255]);
+my($BLEND_STEP, $BLEND_DELAY, @BLEND) = (10, 10);
+
+############################################################################
+
 sub new {
 
   my($proto, %args) = @_;
   my $class = ref($proto) || $proto || __PACKAGE__;
   my $self = $class->SUPER::new(%args);
+
+  unless (@BLEND) {
+    my @delta = map { ($FOCUS->[$_] - $BLUR->[$_]) / $BLEND_STEP } 0..2;
+    my @color = @{$BLUR};
+    foreach (0..$BLEND_STEP) {
+      my $rgb = sprintf("#%02x%02x%02x", @color);
+      push @BLEND, $self->{x}->object_get('color', $rgb, $rgb);
+      $color[$_] += $delta[$_] for 0..2;
+      @color = @{$FOCUS} if $_ == $BLEND_STEP;
+    }
+  }
 
   $self->{client} = PerlWM::Client->new(x => $self->{x}, 
 					id => $self->{client_id},
@@ -38,8 +54,10 @@ sub new {
 		y => $geom{y} - 20,
 		width => $geom{width} + 4,
 		height => $geom{height} + 4 + 20,
-		background_pixel => $self->{x}->{white_pixel},
+		background_pixel => $BLEND[0],
 		event_mask => $self->event_mask($mask));
+
+  $self->{blend} = [0, 0];
   
   foreach (@grab) {
     # set up grabs from the client
@@ -118,14 +136,69 @@ sub configure_request {
 
 ############################################################################
 
+sub blend {
+  my($self, $start) = @_;
+  my $blend = $self->{blend};
+  if (defined($start) && (!ref($start))) {
+    if ((($start == -1) && ($blend->[0] == 0) || 
+	 ($start == 1) && ($blend->[0] == $#BLEND))) {
+      # already there
+      return;
+    }
+    $blend->[1] = $start;
+  }
+  $blend->[0] += $blend->[1];
+  $self->ChangeWindowAttributes(background_pixel => $BLEND[$blend->[0]]);
+  $self->ClearArea();
+  if ((($blend->[1] == -1) && ($blend->[0] == 0) || 
+       ($blend->[1] == 1) && ($blend->[0] == $#BLEND))) {
+    # made it
+    $blend->[1] = 0;
+  }
+  elsif ($blend->[1]) {
+    # not there yet, keep going
+    $self->timer_set($BLEND_DELAY, 'Blend');
+  }
+}
+
+############################################################################
+
 sub enter {
 
   my($self, $event) = @_;
   return unless my $client = $self->{client};
   return if $event->{detail} eq 'Inferior';
+  return if $self->{perlwm}->{focus} == $self;
+
   $client->SetInputFocus('None', 'CurrentTime');
-  # TODO: raise after delay?
-  # $frame->ConfigureWindow(stack_mode => 'Above');
+  $self->{perlwm}->{focus} = $self;
+  $self->blend(1);
+
+  $self->timer_set(10000, 'Raise');
+}
+
+############################################################################
+
+sub leave {
+
+  my($self, $event) = @_;
+  return unless my $client = $self->{client};
+  return if $event->{detail} eq 'Inferior';
+  return unless $self->{perlwm}->{focus} == $self;
+
+  $self->{x}->SetInputFocus('None', 'None', 'CurrentTime');
+  $self->{perlwm}->{focus} = $self->{perlwm};
+  $self->blend(-1);
+  $self->timer_set(0, 'Raise');
+}
+
+############################################################################
+
+sub auto_raise {
+
+  my($self, $event) = @_;
+  return unless $self->{perlwm}->{focus} == $self;
+  $self->ConfigureWindow(stack_mode => 'Above');
 }
 
 ############################################################################
@@ -188,6 +261,10 @@ sub EVENT {
 
 	  # TODO: config for focus policy
 	  'Enter' => \&enter,
+	  'Leave' => \&leave,
+	  'Timer(Raise)' => \&auto_raise,
+	  'Timer(Blend)' => \&blend,
+
 	  'ConfigureRequest' => \&configure_request,
 	  'DestroyNotify' => \&destroy_notify,
 	  'MapNotify' => \&map_notify,
